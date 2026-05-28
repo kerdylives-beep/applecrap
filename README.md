@@ -4,6 +4,12 @@ AppleCrap Alpha is a portable Windows app for taking song requests from Twitch c
 
 > Alpha means usable, but still early. Expect sharp edges, especially around Apple Music automation.
 
+## Download
+
+- ⬇️ [Download AppleCrap Alpha for Windows](https://github.com/kerdylives-beep/applecrap/releases/latest/download/AppleCrap.Alpha.zip)
+- 📦 Latest portable zip: `v0.2.0-alpha.1`
+- 🪟 Unzip it, run `AppleCrap Alpha.exe`, and keep the `data` folder beside it.
+
 ## What It Does
 
 - 🎵 Listens for Twitch chat song requests like `!request Human Nature Michael Jackson`
