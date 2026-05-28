@@ -1,0 +1,32 @@
+[package]
+name = "applecrap_alpha"
+version = "0.2.0-alpha.1"
+description = "Portable AppleCrap Alpha rewrite"
+authors = ["KerdyLives"]
+edition = "2021"
+
+[lib]
+name = "applecrap_alpha_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "6"
+regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+scraper = "0.24"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+tokio-native-tls = "0.3"
+uuid = { version = "1", features = ["serde", "v4"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
+tauri-plugin-global-shortcut = "2"
