@@ -145,7 +145,6 @@ release/portable/AppleCrap Alpha.zip
 
 - `src/` - React app, UI, typed Tauri bridge, and client state
 - `src-tauri/` - Rust app shell, persistence, Twitch IRC, Apple Music lookup, diagnostics, and automation services
-- `electron/` - legacy reference implementation kept for migration context
 - `scripts/` - icon and portable packaging helpers
 
 ## Status
