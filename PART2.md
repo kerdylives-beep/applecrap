@@ -59,6 +59,25 @@ Requirements now list just Windows, WebView2, and an Apple Music
 subscription signed in inside the app's Player window. Removed all
 UIA/automation/experimental/flicker language.
 
+## 9. Visual rework backlog (planned next)
+
+The app is maintained for a friend who streams — the target user is NOT the
+developer, so first-run self-service matters most. When redoing the visuals:
+
+- **Twitch OAuth token onboarding is the roughest edge.** The Bot settings
+  just ask for a token "starting with oauth:"; a non-technical user has no
+  idea where to get one. Add an in-app walkthrough (link or short steps
+  next to the token field) and a matching "Getting your bot token" section
+  in the README.
+- Consider auto-showing the player window on first run when the probe
+  reports SignInRequired, so sign-in is impossible to miss.
+- After the redesign, re-run the screenshot pipeline (seed-queue.py +
+  capture-window.ps1 with PrintWindow + name-censor pass — scripts were in
+  the 2026-07-10 session scratchpad; they are small, recreate if gone) and
+  overwrite `img/screenshots/*.png`; the README references fixed filenames
+  so no README edits are needed. Sign the player into Browse/New first so
+  no account name appears (avoids the censor pass entirely).
+
 ## 7. Matcher refinement — NOT DONE (still open, optional)
 
 "Human Nature Michael Jackson" now correctly avoids karaoke (tests exist),
