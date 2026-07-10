@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-player-bridge-report"
+description = "Enables the player_bridge_report command without any pre-configured scope."
+commands.allow = ["player_bridge_report"]
+
+[[permission]]
+identifier = "deny-player-bridge-report"
+description = "Denies the player_bridge_report command without any pre-configured scope."
+commands.deny = ["player_bridge_report"]

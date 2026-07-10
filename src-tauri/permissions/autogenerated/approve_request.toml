@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-approve-request"
+description = "Enables the approve_request command without any pre-configured scope."
+commands.allow = ["approve_request"]
+
+[[permission]]
+identifier = "deny-approve-request"
+description = "Denies the approve_request command without any pre-configured scope."
+commands.deny = ["approve_request"]

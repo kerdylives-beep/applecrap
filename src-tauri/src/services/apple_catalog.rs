@@ -288,15 +288,58 @@ fn slugify(value: &str) -> String {
     }
 }
 
+/// Markers that identify karaoke/cover/tribute recordings. These regularly
+/// carry the requested artist's name in their own title (e.g. "Human Nature
+/// Michael Jackson" by a karaoke act), which otherwise wins exact-title
+/// bonuses over the real song.
+const IMITATION_MARKERS: &[&str] = &[
+    "karaoke",
+    "originally performed",
+    "in the style of",
+    "as made famous",
+    "made famous by",
+    "tribute to",
+    "tribute band",
+    "cover version",
+    "instrumental version",
+    "backing track",
+];
+
+fn imitation_penalty(query_normalized: &str, title: &str, artist: &str, album: &str) -> i32 {
+    let query_wants_imitation = IMITATION_MARKERS
+        .iter()
+        .any(|marker| query_normalized.contains(marker))
+        || query_normalized.contains("cover")
+        || query_normalized.contains("instrumental");
+    if query_wants_imitation {
+        return 0;
+    }
+
+    let is_imitation = IMITATION_MARKERS
+        .iter()
+        .any(|marker| title.contains(marker) || artist.contains(marker) || album.contains(marker));
+    if is_imitation {
+        -600
+    } else {
+        0
+    }
+}
+
 fn score_track(query: &str, song: &ItunesSong) -> i32 {
     let query_normalized = normalize_text(query);
     let title = normalize_text(song.track_name.as_deref().unwrap_or_default());
     let artist = normalize_text(song.artist_name.as_deref().unwrap_or_default());
     let album = normalize_text(song.collection_name.as_deref().unwrap_or_default());
-    let mut score = 0;
+    let mut score = imitation_penalty(&query_normalized, &title, &artist, &album);
 
     if title == query_normalized {
-        score += 300;
+        // A title that swallows the entire query while the artist shares no
+        // words with it is usually a cover named after the request.
+        score += if artist.is_empty() || token_overlap(&artist, &query_normalized) > 0.0 {
+            300
+        } else {
+            60
+        };
     }
     if format!("{artist} {title}") == query_normalized
         || format!("{title} {artist}") == query_normalized
@@ -369,7 +412,7 @@ fn score_web_track(query: &str, track: &TrackMatch) -> i32 {
     let query_normalized = normalize_text(query);
     let title = normalize_text(&track.title);
     let artist = normalize_text(&track.artist_name);
-    let mut score = 0;
+    let mut score = imitation_penalty(&query_normalized, &title, &artist, "");
 
     if title == query_normalized {
         score += 300;
@@ -425,6 +468,55 @@ mod tests {
         };
 
         assert!(score_track("human nature michael jackson", &song) > 200);
+    }
+
+    #[test]
+    fn real_track_outranks_karaoke_named_after_query() {
+        let real = ItunesSong {
+            wrapper_type: Some("track".to_string()),
+            kind: Some("song".to_string()),
+            track_name: Some("Human Nature".to_string()),
+            artist_name: Some("Michael Jackson".to_string()),
+            collection_name: Some("Thriller".to_string()),
+            ..Default::default()
+        };
+        let karaoke_exact_title = ItunesSong {
+            wrapper_type: Some("track".to_string()),
+            kind: Some("song".to_string()),
+            track_name: Some("Human Nature Michael Jackson".to_string()),
+            artist_name: Some("Party Tyme Karaoke".to_string()),
+            collection_name: Some("Karaoke Super Hits".to_string()),
+            ..Default::default()
+        };
+        let karaoke_styled = ItunesSong {
+            wrapper_type: Some("track".to_string()),
+            kind: Some("song".to_string()),
+            track_name: Some(
+                "Human Nature (Originally Performed by Michael Jackson) [Karaoke Version]"
+                    .to_string(),
+            ),
+            artist_name: Some("Karaoke Cloud".to_string()),
+            collection_name: Some("Karaoke Hits".to_string()),
+            ..Default::default()
+        };
+
+        let query = "human nature michael jackson";
+        assert!(score_track(query, &real) > score_track(query, &karaoke_exact_title));
+        assert!(score_track(query, &real) > score_track(query, &karaoke_styled));
+    }
+
+    #[test]
+    fn karaoke_request_still_finds_karaoke() {
+        let karaoke = ItunesSong {
+            wrapper_type: Some("track".to_string()),
+            kind: Some("song".to_string()),
+            track_name: Some("Human Nature (Karaoke Version)".to_string()),
+            artist_name: Some("Karaoke Cloud".to_string()),
+            collection_name: Some("Karaoke Hits".to_string()),
+            ..Default::default()
+        };
+
+        assert!(score_track("human nature karaoke", &karaoke) > 0);
     }
 
     #[test]

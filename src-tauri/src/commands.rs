@@ -175,6 +175,34 @@ pub async fn import_legacy_state(
 }
 
 #[tauri::command]
+pub async fn player_bridge_report(
+    payload: serde_json::Value,
+    context: State<'_, Arc<AppContext>>,
+) -> Result<(), String> {
+    context.player_bridge.handle_report(payload).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn player_show(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    let window = app
+        .get_webview_window(crate::services::player_bridge::PLAYER_WINDOW_LABEL)
+        .ok_or_else(|| "The player window is not available.".to_string())?;
+    window.show().map_err(|error| error.to_string())?;
+    window.set_focus().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn player_hide(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    let window = app
+        .get_webview_window(crate::services::player_bridge::PLAYER_WINDOW_LABEL)
+        .ok_or_else(|| "The player window is not available.".to_string())?;
+    window.hide().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub fn window_minimize(window: tauri::WebviewWindow) -> Result<(), String> {
     window.minimize().map_err(|error| error.to_string())
 }

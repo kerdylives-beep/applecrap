@@ -416,6 +416,9 @@ function App() {
                     {panel.label}
                   </button>
                 ))}
+                <button className={styles.menuTextButton} onClick={() => void invoke('player_show')}>
+                  Player ↗
+                </button>
               </div>
             </div>
           </div>

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-send-request-to-manual-review"
+description = "Enables the send_request_to_manual_review command without any pre-configured scope."
+commands.allow = ["send_request_to_manual_review"]
+
+[[permission]]
+identifier = "deny-send-request-to-manual-review"
+description = "Denies the send_request_to_manual_review command without any pre-configured scope."
+commands.deny = ["send_request_to_manual_review"]

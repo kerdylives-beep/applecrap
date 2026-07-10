@@ -2,6 +2,7 @@ pub mod apple_catalog;
 pub mod automation_bridge;
 pub mod diagnostics;
 pub mod now_playing_probe;
+pub mod player_bridge;
 pub mod queue_engine;
 pub mod settings_store;
 pub mod twitch_service;

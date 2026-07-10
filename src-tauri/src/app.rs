@@ -14,17 +14,17 @@ use crate::{
     },
     services::{
         apple_catalog::AppleCatalog, automation_bridge::AutomationBridge, diagnostics,
-        now_playing_probe::NowPlayingProbe, queue_engine, settings_store::SettingsStore,
-        twitch_service, window_shell,
+        player_bridge::PlayerBridge, queue_engine, settings_store::SettingsStore, twitch_service,
+        window_shell,
     },
 };
 
 pub struct AppContext {
     pub handle: AppHandle,
     pub storage: SettingsStore,
+    pub player_bridge: PlayerBridge,
     apple_catalog: AppleCatalog,
     automation_bridge: AutomationBridge,
-    probe_service: NowPlayingProbe,
     persisted: RwLock<PersistedState>,
     runtime: RwLock<RuntimeState>,
     twitch_connection: Mutex<Option<TwitchConnection>>,
@@ -71,11 +71,11 @@ impl AppContext {
 
         Ok(Self {
             handle,
+            player_bridge: PlayerBridge::new(),
             apple_catalog: AppleCatalog::new(),
             automation_bridge: AutomationBridge::new(
                 storage.scripts_dir.join("apple-music-automation.ps1"),
             ),
-            probe_service: NowPlayingProbe::new(storage.scripts_dir.join("now-playing-probe.ps1")),
             storage,
             persisted: RwLock::new(persisted),
             runtime: RwLock::new(RuntimeState {
@@ -600,25 +600,11 @@ impl AppContext {
 
     pub async fn run_probe_cycle(self: &Arc<Self>) -> Result<ProbeSnapshot> {
         let top_item = self.persisted.read().await.queue.first().cloned();
-        let run = match self.probe_service.run(top_item.as_ref()).await {
-            Ok(run) => run,
-            Err(error) => {
-                let snapshot = ProbeSnapshot {
-                    source: "error".to_string(),
-                    status: "Unavailable".to_string(),
-                    last_error: Some(error.to_string()),
-                    explanation: error.to_string(),
-                    updated_at: Some(crate::models::now_iso()),
-                    ..ProbeSnapshot::default()
-                };
-                self.set_probe_snapshot(snapshot.clone(), String::new())
-                    .await;
-                return Ok(snapshot);
-            }
-        };
-
-        let snapshot = run.snapshot.clone();
-        self.set_probe_snapshot(snapshot.clone(), run.session_signature)
+        let (snapshot, session_signature) = self
+            .player_bridge
+            .build_probe(&self.handle, top_item.as_ref())
+            .await;
+        self.set_probe_snapshot(snapshot.clone(), session_signature)
             .await;
 
         if snapshot.matched {
@@ -808,7 +794,7 @@ impl AppContext {
     async fn ensure_queue_progress(self: &Arc<Self>, reason: &str) {
         self.promote_front_request(reason).await;
 
-        let (settings, request, action) = {
+        let (settings, request) = {
             let persisted = self.persisted.read().await;
             let settings = persisted.settings.clone();
             let Some(request) = persisted.queue.first().cloned() else {
@@ -816,8 +802,6 @@ impl AppContext {
             };
 
             if !settings.automation.auto_arm_enabled
-                || !settings.automation.experimental_automation_enabled
-                || settings.automation.adapter != crate::models::AutomationAdapterKind::UiAutomation
                 || request.resolution != crate::models::ResolutionStatus::Matched
                 || request.track.is_none()
                 || request.requires_manual_review
@@ -829,16 +813,7 @@ impl AppContext {
                 return;
             }
 
-            let action = match settings.automation.handoff_mode {
-                crate::models::AutomationHandoffMode::PlayNow => {
-                    crate::models::AutomationAction::AttemptPlay
-                }
-                crate::models::AutomationHandoffMode::PlayNext => {
-                    crate::models::AutomationAction::AttemptQueueAction
-                }
-            };
-
-            (settings, request, action)
+            (settings, request)
         };
 
         {
@@ -849,55 +824,33 @@ impl AppContext {
             runtime.auto_handoff_in_flight = true;
         }
 
-        let payload = RunAutomationPayload {
-            adapter: crate::models::AutomationAdapterKind::UiAutomation,
-            action: action.clone(),
-            request_id: Some(request.id.clone()),
-            dry_run: Some(false),
-            allow_in_streamer_safe_mode: Some(
-                settings.automation.control_mode == AutomationControlMode::StreamerSafe,
-            ),
-        };
-
-        let result = self
-            .automation_bridge
-            .run(&payload, &settings, Some(&request))
+        let track = request.track.as_ref().expect("auto mode requires a track");
+        let outcome = self
+            .player_bridge
+            .dispatch_track(&self.handle, &track.id, &settings.automation.handoff_mode)
             .await;
-        self.record_automation_result(result.clone()).await;
+
+        let (ok, detail) = match &outcome {
+            Ok(summary) => (true, summary.clone()),
+            Err(error) => (false, error.to_string()),
+        };
         self.add_log(
-            if result.ok {
-                LogLevel::Info
-            } else {
-                LogLevel::Warn
-            },
+            if ok { LogLevel::Info } else { LogLevel::Warn },
             format!(
-                "Auto mode {:?} for \"{}\" after {}: {} ({})",
-                result.action,
-                request
-                    .track
-                    .as_ref()
-                    .map(|track| track.title.as_str())
-                    .unwrap_or(request.query.as_str()),
-                reason,
-                result.summary,
-                result.detail
+                "Auto mode dispatch for \"{}\" after {}: {}",
+                track.title, reason, detail
             ),
         )
         .await;
 
-        let handoff_note = if result.ok {
-            Some(result.summary.clone())
-        } else {
-            Some(result.detail.clone())
-        };
         self.update_request_handoff(
             &request.id,
-            if result.ok {
+            if ok {
                 QueueHandoffState::SentToPlayer
             } else {
                 QueueHandoffState::FailedDispatch
             },
-            handoff_note,
+            Some(detail),
         )
         .await;
 
@@ -960,18 +913,12 @@ impl AppContext {
     }
 
     async fn dispatch_request_inner(self: &Arc<Self>, source: &str) -> Result<()> {
-        let (settings, request, action) = {
+        let (settings, request) = {
             let persisted = self.persisted.read().await;
             let settings = persisted.settings.clone();
             let Some(request) = persisted.queue.first().cloned() else {
                 anyhow::bail!("No request is ready to dispatch.");
             };
-
-            if !settings.automation.experimental_automation_enabled
-                || settings.automation.adapter != crate::models::AutomationAdapterKind::UiAutomation
-            {
-                anyhow::bail!("Streamer-safe dispatch needs the UI automation adapter enabled.");
-            }
 
             if request.track.is_none() || request.requires_manual_review {
                 anyhow::bail!("The front request still needs a matched Apple Music track.");
@@ -986,60 +933,36 @@ impl AppContext {
                 anyhow::bail!("The front request cannot be dispatched right now.");
             }
 
-            let action = match settings.automation.handoff_mode {
-                crate::models::AutomationHandoffMode::PlayNow => {
-                    crate::models::AutomationAction::AttemptPlay
-                }
-                crate::models::AutomationHandoffMode::PlayNext => {
-                    crate::models::AutomationAction::AttemptQueueAction
-                }
-            };
-
-            (settings, request, action)
+            (settings, request)
         };
 
-        let payload = RunAutomationPayload {
-            adapter: crate::models::AutomationAdapterKind::UiAutomation,
-            action: action.clone(),
-            request_id: Some(request.id.clone()),
-            dry_run: Some(false),
-            allow_in_streamer_safe_mode: Some(true),
-        };
-
-        let result = self
-            .automation_bridge
-            .run(&payload, &settings, Some(&request))
+        let track = request.track.as_ref().expect("dispatch requires a track");
+        let outcome = self
+            .player_bridge
+            .dispatch_track(&self.handle, &track.id, &settings.automation.handoff_mode)
             .await;
-        self.record_automation_result(result.clone()).await;
+
+        let (ok, detail) = match &outcome {
+            Ok(summary) => (true, summary.clone()),
+            Err(error) => (false, error.to_string()),
+        };
         self.add_log(
-            if result.ok {
-                LogLevel::Info
-            } else {
-                LogLevel::Warn
-            },
+            if ok { LogLevel::Info } else { LogLevel::Warn },
             format!(
-                "Streamer-safe dispatch {:?} for \"{}\" via {}: {} ({})",
-                result.action,
-                request
-                    .track
-                    .as_ref()
-                    .map(|track| track.title.as_str())
-                    .unwrap_or(request.query.as_str()),
-                source,
-                result.summary,
-                result.detail
+                "Player dispatch for \"{}\" via {}: {}",
+                track.title, source, detail
             ),
         )
         .await;
 
-        let handoff_note = if result.ok {
-            Some(format!("Triggered via {source}: {}", result.summary))
+        let handoff_note = if ok {
+            Some(format!("Triggered via {source}: {detail}"))
         } else {
-            Some(result.detail.clone())
+            Some(detail.clone())
         };
         self.update_request_handoff(
             &request.id,
-            if result.ok {
+            if ok {
                 QueueHandoffState::SentToPlayer
             } else {
                 QueueHandoffState::FailedDispatch
@@ -1048,10 +971,10 @@ impl AppContext {
         )
         .await;
 
-        if result.ok {
+        if ok {
             Ok(())
         } else {
-            anyhow::bail!(result.detail)
+            anyhow::bail!(detail)
         }
     }
 

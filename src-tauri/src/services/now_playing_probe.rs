@@ -78,6 +78,22 @@ pub struct ProbeRunResult {
     pub session_signature: String,
 }
 
+/// Build a snapshot from a single known media session (used by the embedded
+/// player bridge, which gets its data from MusicKit instead of a probe).
+pub fn snapshot_from_session(
+    session: ProbeSession,
+    top_item: Option<&QueueItem>,
+) -> ProbeSnapshot {
+    build_snapshot(
+        ProbePayload {
+            session: Some(session.clone()),
+            sessions: vec![session],
+            error: None,
+        },
+        top_item,
+    )
+}
+
 #[derive(Deserialize, Default)]
 #[serde(default, rename_all = "camelCase")]
 struct ProbePayload {

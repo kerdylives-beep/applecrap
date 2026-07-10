@@ -177,6 +177,306 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Enables the approve_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-approve-request",
+          "markdownDescription": "Enables the approve_request command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the bootstrap_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-bootstrap-app",
+          "markdownDescription": "Enables the bootstrap_app command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the clear_queue command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-clear-queue",
+          "markdownDescription": "Enables the clear_queue command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the connect_bot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-connect-bot",
+          "markdownDescription": "Enables the connect_bot command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the disconnect_bot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-disconnect-bot",
+          "markdownDescription": "Enables the disconnect_bot command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the dispatch_next_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-dispatch-next-request",
+          "markdownDescription": "Enables the dispatch_next_request command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the enqueue_manual_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-enqueue-manual-request",
+          "markdownDescription": "Enables the enqueue_manual_request command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the export_diagnostics command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-export-diagnostics",
+          "markdownDescription": "Enables the export_diagnostics command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the import_legacy_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-import-legacy-state",
+          "markdownDescription": "Enables the import_legacy_state command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the open_track command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-track",
+          "markdownDescription": "Enables the open_track command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the player_bridge_report command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-player-bridge-report",
+          "markdownDescription": "Enables the player_bridge_report command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the player_hide command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-player-hide",
+          "markdownDescription": "Enables the player_hide command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the player_show command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-player-show",
+          "markdownDescription": "Enables the player_show command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the remove_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-remove-request",
+          "markdownDescription": "Enables the remove_request command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the reveal_data_folder command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-reveal-data-folder",
+          "markdownDescription": "Enables the reveal_data_folder command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the run_automation_step command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-run-automation-step",
+          "markdownDescription": "Enables the run_automation_step command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the run_probe command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-run-probe",
+          "markdownDescription": "Enables the run_probe command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the save_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-settings",
+          "markdownDescription": "Enables the save_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the search_apple_music command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-search-apple-music",
+          "markdownDescription": "Enables the search_apple_music command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the send_request_to_manual_review command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-send-request-to-manual-review",
+          "markdownDescription": "Enables the send_request_to_manual_review command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_dispatch_hotkey command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-dispatch-hotkey",
+          "markdownDescription": "Enables the set_dispatch_hotkey command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the window_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-window-close",
+          "markdownDescription": "Enables the window_close command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the window_minimize command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-window-minimize",
+          "markdownDescription": "Enables the window_minimize command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the window_start_drag command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-window-start-drag",
+          "markdownDescription": "Enables the window_start_drag command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the window_toggle_maximize command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-window-toggle-maximize",
+          "markdownDescription": "Enables the window_toggle_maximize command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the approve_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-approve-request",
+          "markdownDescription": "Denies the approve_request command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the bootstrap_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-bootstrap-app",
+          "markdownDescription": "Denies the bootstrap_app command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the clear_queue command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-clear-queue",
+          "markdownDescription": "Denies the clear_queue command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the connect_bot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-connect-bot",
+          "markdownDescription": "Denies the connect_bot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the disconnect_bot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-disconnect-bot",
+          "markdownDescription": "Denies the disconnect_bot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the dispatch_next_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-dispatch-next-request",
+          "markdownDescription": "Denies the dispatch_next_request command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the enqueue_manual_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-enqueue-manual-request",
+          "markdownDescription": "Denies the enqueue_manual_request command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the export_diagnostics command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-export-diagnostics",
+          "markdownDescription": "Denies the export_diagnostics command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the import_legacy_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-import-legacy-state",
+          "markdownDescription": "Denies the import_legacy_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_track command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-track",
+          "markdownDescription": "Denies the open_track command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the player_bridge_report command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-player-bridge-report",
+          "markdownDescription": "Denies the player_bridge_report command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the player_hide command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-player-hide",
+          "markdownDescription": "Denies the player_hide command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the player_show command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-player-show",
+          "markdownDescription": "Denies the player_show command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the remove_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-remove-request",
+          "markdownDescription": "Denies the remove_request command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the reveal_data_folder command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-reveal-data-folder",
+          "markdownDescription": "Denies the reveal_data_folder command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the run_automation_step command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-run-automation-step",
+          "markdownDescription": "Denies the run_automation_step command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the run_probe command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-run-probe",
+          "markdownDescription": "Denies the run_probe command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-settings",
+          "markdownDescription": "Denies the save_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the search_apple_music command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-search-apple-music",
+          "markdownDescription": "Denies the search_apple_music command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the send_request_to_manual_review command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-send-request-to-manual-review",
+          "markdownDescription": "Denies the send_request_to_manual_review command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_dispatch_hotkey command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-dispatch-hotkey",
+          "markdownDescription": "Denies the set_dispatch_hotkey command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the window_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-window-close",
+          "markdownDescription": "Denies the window_close command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the window_minimize command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-window-minimize",
+          "markdownDescription": "Denies the window_minimize command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the window_start_drag command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-window-start-drag",
+          "markdownDescription": "Denies the window_start_drag command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the window_toggle_maximize command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-window-toggle-maximize",
+          "markdownDescription": "Denies the window_toggle_maximize command without any pre-configured scope."
+        },
+        {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
           "type": "string",
           "const": "core:default",

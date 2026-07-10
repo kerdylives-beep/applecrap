@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-enqueue-manual-request"
+description = "Enables the enqueue_manual_request command without any pre-configured scope."
+commands.allow = ["enqueue_manual_request"]
+
+[[permission]]
+identifier = "deny-enqueue-manual-request"
+description = "Denies the enqueue_manual_request command without any pre-configured scope."
+commands.deny = ["enqueue_manual_request"]

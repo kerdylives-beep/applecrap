@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-disconnect-bot"
+description = "Enables the disconnect_bot command without any pre-configured scope."
+commands.allow = ["disconnect_bot"]
+
+[[permission]]
+identifier = "deny-disconnect-bot"
+description = "Denies the disconnect_bot command without any pre-configured scope."
+commands.deny = ["disconnect_bot"]

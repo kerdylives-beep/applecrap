@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-player-hide"
+description = "Enables the player_hide command without any pre-configured scope."
+commands.allow = ["player_hide"]
+
+[[permission]]
+identifier = "deny-player-hide"
+description = "Denies the player_hide command without any pre-configured scope."
+commands.deny = ["player_hide"]

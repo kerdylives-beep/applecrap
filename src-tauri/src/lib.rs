@@ -44,6 +44,32 @@ pub fn run() {
             }
             context.start_background_services();
             app.manage(context);
+
+            // Embedded Apple Music player. Hidden by default; audio keeps
+            // playing while hidden. Closing the window hides it instead so the
+            // playback webview is never destroyed mid-stream.
+            #[cfg(desktop)]
+            {
+                let player = tauri::WebviewWindowBuilder::new(
+                    app,
+                    services::player_bridge::PLAYER_WINDOW_LABEL,
+                    tauri::WebviewUrl::External("https://music.apple.com/".parse().unwrap()),
+                )
+                .title("AppleCrap Player — Apple Music")
+                .inner_size(1150.0, 820.0)
+                .visible(false)
+                .initialization_script(include_str!("scripts/player-bridge.js"))
+                .build()?;
+
+                let player_handle = player.clone();
+                player.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = player_handle.hide();
+                    }
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -68,7 +94,10 @@ pub fn run() {
             window_minimize,
             window_toggle_maximize,
             window_close,
-            window_start_drag
+            window_start_drag,
+            player_bridge_report,
+            player_show,
+            player_hide
         ])
         .run(tauri::generate_context!())
         .expect("error while running AppleCrap Alpha");

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-player-show"
+description = "Enables the player_show command without any pre-configured scope."
+commands.allow = ["player_show"]
+
+[[permission]]
+identifier = "deny-player-show"
+description = "Denies the player_show command without any pre-configured scope."
+commands.deny = ["player_show"]
