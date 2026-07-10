@@ -34,13 +34,15 @@ It is probably not for you yet if you need a polished, signed, one-click product
 
 ## Screenshots
 
-Screenshots would help a lot here. Good ones to add:
+The request desk — live queue, match confidence, and auto-queue status at a glance:
 
-- 🏠 the main queue screen with a few sample requests
-- ⚙️ the bot/settings setup screen
-- 🎧 the embedded Apple Music player window
+<img src="img/screenshots/dashboard.png" width="420" alt="AppleCrap dashboard showing a dispatched request for Human Nature by Michael Jackson, with auto-queue enabled and two requests waiting">
 
-If you send me screenshots, I can add them to this README and make the GitHub page feel much more welcoming.
+The embedded Apple Music player — sign in once, then it can stay hidden all stream while requests queue into it:
+
+<img src="img/screenshots/player.png" width="720" alt="The embedded Apple Music player window, signed in and showing the Home page">
+
+> These shots use the current alpha look; a visual refresh is planned.
 
 ## Requirements
 
