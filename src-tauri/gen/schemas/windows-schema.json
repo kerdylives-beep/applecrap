@@ -267,12 +267,6 @@
           "markdownDescription": "Enables the reveal_data_folder command without any pre-configured scope."
         },
         {
-          "description": "Enables the run_automation_step command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-run-automation-step",
-          "markdownDescription": "Enables the run_automation_step command without any pre-configured scope."
-        },
-        {
           "description": "Enables the run_probe command without any pre-configured scope.",
           "type": "string",
           "const": "allow-run-probe",
@@ -295,12 +289,6 @@
           "type": "string",
           "const": "allow-send-request-to-manual-review",
           "markdownDescription": "Enables the send_request_to_manual_review command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the set_dispatch_hotkey command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-set-dispatch-hotkey",
-          "markdownDescription": "Enables the set_dispatch_hotkey command without any pre-configured scope."
         },
         {
           "description": "Enables the window_close command without any pre-configured scope.",
@@ -417,12 +405,6 @@
           "markdownDescription": "Denies the reveal_data_folder command without any pre-configured scope."
         },
         {
-          "description": "Denies the run_automation_step command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-run-automation-step",
-          "markdownDescription": "Denies the run_automation_step command without any pre-configured scope."
-        },
-        {
           "description": "Denies the run_probe command without any pre-configured scope.",
           "type": "string",
           "const": "deny-run-probe",
@@ -445,12 +427,6 @@
           "type": "string",
           "const": "deny-send-request-to-manual-review",
           "markdownDescription": "Denies the send_request_to_manual_review command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the set_dispatch_hotkey command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-set-dispatch-hotkey",
-          "markdownDescription": "Denies the set_dispatch_hotkey command without any pre-configured scope."
         },
         {
           "description": "Denies the window_close command without any pre-configured scope.",
