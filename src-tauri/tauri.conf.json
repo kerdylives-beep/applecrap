@@ -14,9 +14,9 @@
       {
         "title": "AppleCrap Alpha",
         "width": 720,
-        "height": 1240,
+        "height": 940,
         "minWidth": 560,
-        "minHeight": 820,
+        "minHeight": 700,
         "resizable": true,
         "decorations": false,
         "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
