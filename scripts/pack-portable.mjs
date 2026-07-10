@@ -46,7 +46,7 @@ function buildPortableReadme() {
     'Important prerequisites:',
     '- WebView2 is required on Windows for Tauri apps.',
     '- A Twitch bot account token that starts with oauth: is required for chat connection.',
-    '- Apple Music Windows app is required for playback handoff and probe testing.',
+    '- An Apple Music subscription. Click "Player" inside the app and sign in once; no other Apple software is needed.',
     '',
     'Diagnostics:',
     '- Use the in-app "Export diagnostics" action to create a support bundle.',
@@ -56,21 +56,19 @@ function buildPortableReadme() {
 }
 
 function compressDirectory(sourceDir, outputZip) {
+  // Paths are inlined because arguments after -Command are not bound to a
+  // scriptblock's param() block. $ErrorActionPreference makes Compress-Archive
+  // failures terminating so a bad run cannot exit 0 and leave a stale zip.
+  const command = [
+    "$ErrorActionPreference = 'Stop'",
+    `if (Test-Path -LiteralPath '${outputZip}') { Remove-Item -LiteralPath '${outputZip}' -Force }`,
+    `Compress-Archive -Path '${sourceDir}\\*' -DestinationPath '${outputZip}' -Force`,
+  ].join('; ')
+
   return new Promise((resolve, reject) => {
     execFile(
       'powershell.exe',
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        `& { ${[
-          'param($SourceDir, $OutputZip)',
-          'if (Test-Path -LiteralPath $OutputZip) { Remove-Item -LiteralPath $OutputZip -Force }',
-          'Get-ChildItem -LiteralPath $SourceDir | Compress-Archive -DestinationPath $OutputZip -Force',
-        ].join('; ')} }`,
-        sourceDir,
-        outputZip,
-      ],
+      ['-NoProfile', '-NonInteractive', '-Command', command],
       (error, stdout, stderr) => {
         if (error) {
           reject(new Error(stderr || stdout || error.message))
