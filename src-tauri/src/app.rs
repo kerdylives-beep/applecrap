@@ -54,7 +54,15 @@ impl AppContext {
         ));
         let persisted = storage.load_persisted_state();
         let _ = storage.save_persisted_state(&persisted);
-        let legacy_import = storage.detect_legacy_import();
+        // Only offer the legacy Electron import while the app is unconfigured;
+        // once a bot is set up the old data is noise.
+        let legacy_import = if persisted.settings.twitch.oauth_token.trim().is_empty()
+            && persisted.settings.twitch.channel.trim().is_empty()
+        {
+            storage.detect_legacy_import()
+        } else {
+            LegacyImportStatus::default()
+        };
 
         Ok(Self {
             handle,

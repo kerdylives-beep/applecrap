@@ -41,6 +41,18 @@ pub fn run() {
                         let _ = player_handle.hide();
                     }
                 });
+
+                // The player window intentionally survives its own close (it
+                // only hides), so closing the main window must end the app or
+                // the player keeps the process alive in the background.
+                if let Some(main) = app.get_webview_window("main") {
+                    let exit_handle = app.handle().clone();
+                    main.on_window_event(move |event| {
+                        if let tauri::WindowEvent::Destroyed = event {
+                            exit_handle.exit(0);
+                        }
+                    });
+                }
             }
 
             Ok(())
