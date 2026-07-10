@@ -3,60 +3,55 @@
 Part 1 (commit `8698f07`) replaced the UIA/PowerShell automation with an
 embedded music.apple.com player window driven through MusicKit
 (`src-tauri/src/services/player_bridge.rs` + `src-tauri/src/scripts/player-bridge.js`).
-The old machinery still compiles but is dead weight. Part 2 is mechanical
-removal and polish — no architectural decisions left.
+Part 2 executed the mechanical removal/polish below.
 
-## 1. Delete the legacy automation stack
+## 1. Delete the legacy automation stack — DONE
 
-- `src-tauri/src/scripts/apple-music-automation.ps1` and `now-playing-probe.ps1`
-- `src-tauri/src/services/automation_bridge.rs` and its `mod.rs` entry
-- In `now_playing_probe.rs`: keep `snapshot_from_session`, `build_snapshot`,
-  `match_queue_item` (the bridge uses them — consider moving them into
-  `player_bridge.rs` and deleting the file). Delete `NowPlayingProbe` struct
-  and the PowerShell plumbing.
-- `settings_store.rs`: remove `write_support_scripts()` and `scripts_dir`
-  (they exist only to copy the .ps1 files into the data dir).
-- `commands.rs`/`lib.rs`: remove `run_automation_step` command.
-- `models.rs`: remove `RunAutomationPayload`, `AutomationAction`,
-  `AutomationAdapterKind`, `AutomationCapabilities`, `AutomationSnapshot`,
-  and the `automation` field on `AppState`. In `AutomationSettings` drop
-  `adapter`, `experimental_automation_enabled`, and `control_mode` (and the
-  streamer-safe gating in `app.rs` `open_track`/`run_automation`); keep
-  `handoff_mode`, `auto_arm_enabled`, `dispatch_hotkey`.
-- `build.rs` + `capabilities/default.json`: remove `run_automation_step`
-  entries.
-- Frontend: delete the Automation panel and adapter/control-mode UI from
-  `src/App.tsx`, prune `src/types.ts` and `src/useAppStore.ts` to match.
-- Keep `cargo test` + `npm run build` green after each removal.
+Removed the `.ps1` scripts, `automation_bridge.rs`, and the standalone
+`now_playing_probe.rs` module (its snapshot/matching logic and tests moved
+into `player_bridge.rs`). Removed `write_support_scripts()`/`scripts_dir`,
+the `run_automation_step` command, and the automation-adapter model types
+(`AutomationAdapterKind`, `AutomationAction`, `AutomationCapabilities`,
+`AutomationRunResult`, `AutomationSnapshot`).
 
-## 2. Player status strip (dashboard)
+## 2. Simplify the control model — DONE (superseded the original plan)
 
-Surface bridge state on the dashboard: Connected / Loading / Sign-in
-required (from the probe snapshot's `source: "apple-music-web"` states),
-now-playing line, and the Show Player button (exists in the title bar as
-"Player ↗"). Consider auto-showing the player window on first run when the
-probe reports `SignInRequired`.
+Rather than keeping `AutomationControlMode`/`AutomationHandoffMode`/the
+dispatch hotkey around, the control model was collapsed further: Play
+Next (`queueNext`) is now the only dispatch behaviour, the streamer-safe
+gating is gone, and `AutomationSettings` was replaced by a single
+`PlayerSettings { auto_queue: bool }` (aliased from the old `automation`
+JSON key so existing `state.json` files still load). The dispatch hotkey
+feature (setting, command, `tauri-plugin-global-shortcut` dependency) was
+removed entirely. `dispatch_next_request` remains as a manual "send now"
+action for the front request.
 
-## 3. Chat commands (cheap wins)
+## 3. Player status strip (dashboard) — DONE
+
+The dashboard surfaces Connected / Loading / Sign-in required /
+Disconnected (derived from the probe snapshot), the current now-playing
+line, and a "Show player" button that becomes "Open player to sign in"
+with a warn tone when sign-in is required.
+
+## 4. Chat commands (cheap wins) — NOT DONE (still open)
 
 - `!song` — reply with the probe's current title/artist.
 - `!queue` — reply with requester's position and the next few titles.
 - `!skip` (mods/broadcaster only) — `player_bridge.run_command(handle, "skip", None)`.
-All wiring lives in `twitch_service.rs::handle_irc_line`.
+All wiring would live in `twitch_service.rs::handle_irc_line`.
 
-## 4. Remove the debug badge
+## 5. Remove the debug badge — DONE
 
-`player-bridge.js` renders a bottom-left channel/status badge for debugging.
-Remove it (or gate it behind a setting) once stable.
+Removed the bottom-left channel/status badge from `player-bridge.js`; the
+IPC-with-title-fallback channel logic is unchanged.
 
-## 5. README rewrite
+## 6. README rewrite — DONE
 
-Requirements change: Apple Music for Windows app NO LONGER required — just
-WebView2 and an Apple Music subscription signed in inside the app's Player
-window. Remove all UIA/automation/experimental language and the "flicker"
-caveats. Document: first run → open Player → sign in → done.
+Requirements now list just Windows, WebView2, and an Apple Music
+subscription signed in inside the app's Player window. Removed all
+UIA/automation/experimental/flicker language.
 
-## 6. Matcher refinement (optional)
+## 7. Matcher refinement — NOT DONE (still open, optional)
 
 "Human Nature Michael Jackson" now correctly avoids karaoke (tests exist),
 but among *legitimate* same-song variants (movie/soundtrack re-releases)
@@ -64,7 +59,7 @@ the pick follows iTunes popularity order. If it bothers users: blend the
 iTunes result index into `score_track` as a small prior, and/or penalize
 soundtrack albums contextually.
 
-## 7. Release verification
+## 8. Release verification — NOT DONE (manual QA, do before shipping)
 
 `npm run tauri:portable`, then on the unpacked build verify:
 - player window works and stays signed in across restarts (WebView2 profile
@@ -74,6 +69,8 @@ soundtrack albums contextually.
   `additionalBrowserArgs` on the main window in `tauri.conf.json`)
 - audio keeps playing while the player window is hidden
 - ACL works in release (capabilities/, build.rs app manifest)
+- window fits on a 1080p display at both the default size and the
+  560x700 minimum (`tauri.conf.json` window bounds)
 
 ## Known gotchas (learned in Part 1, do not re-derive)
 
