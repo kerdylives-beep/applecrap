@@ -171,9 +171,6 @@
           case 'queueLater':
             await music.playLater({ song: id })
             return done(true, 'Queued at the end of Playing Next.')
-          case 'playNow':
-            await music.setQueue({ song: id, startPlaying: true })
-            return done(true, 'Playing now.')
           case 'play':
             await music.play()
             return done(true, 'Playback resumed.')

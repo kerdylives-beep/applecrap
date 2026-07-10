@@ -132,17 +132,6 @@ pub async fn send_request_to_manual_review(
 }
 
 #[tauri::command]
-pub async fn set_dispatch_hotkey(
-    shortcut: String,
-    context: State<'_, Arc<AppContext>>,
-) -> Result<crate::models::AppState, String> {
-    context
-        .set_dispatch_hotkey(shortcut)
-        .await
-        .map_err(|error| error.to_string())
-}
-
-#[tauri::command]
 pub async fn export_diagnostics(
     context: State<'_, Arc<AppContext>>,
 ) -> Result<crate::models::CommandResult, String> {

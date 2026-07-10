@@ -18,7 +18,6 @@
     "allow-dispatch-next-request",
     "allow-approve-request",
     "allow-send-request-to-manual-review",
-    "allow-set-dispatch-hotkey",
     "allow-export-diagnostics",
     "allow-reveal-data-folder",
     "allow-import-legacy-state",

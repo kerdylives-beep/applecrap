@@ -18,7 +18,6 @@ fn main() {
             "dispatch_next_request",
             "approve_request",
             "send_request_to_manual_review",
-            "set_dispatch_hotkey",
             "export_diagnostics",
             "reveal_data_folder",
             "import_legacy_state",

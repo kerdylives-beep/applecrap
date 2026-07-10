@@ -218,7 +218,7 @@ impl LegacySettings {
             twitch: self.twitch.into_current(),
             request_limits: self.request_limits.into_current(),
             apple_music: self.apple_music.into_current(),
-            automation: Default::default(),
+            player: Default::default(),
         }
     }
 }

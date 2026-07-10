@@ -6,10 +6,10 @@ use tokio::sync::{mpsc, Mutex, RwLock};
 
 use crate::{
     models::{
-        compact_log_message, AppState, AppStats, ApproveRequestPayload, AutomationControlMode,
-        BotConnectionState, BotStatus, CommandResult, DiagnosticsSnapshot, LegacyImportStatus,
-        LogEntry, LogLevel, OpenTrackPayload, PersistedState, ProbeResult, ProbeSnapshot,
-        QueueHandoffState, QueueItem, ResolutionStatus, SaveSettingsPayload, SearchResult,
+        compact_log_message, AppState, AppStats, ApproveRequestPayload, BotConnectionState,
+        BotStatus, CommandResult, DiagnosticsSnapshot, LegacyImportStatus, LogEntry, LogLevel,
+        OpenTrackPayload, PersistedState, ProbeResult, ProbeSnapshot, QueueHandoffState, QueueItem,
+        ResolutionStatus, SaveSettingsPayload, SearchResult,
     },
     services::{
         apple_catalog::AppleCatalog, diagnostics, player_bridge::PlayerBridge, queue_engine,
@@ -129,7 +129,6 @@ impl AppContext {
             settings: persisted.settings.clone(),
             queue: persisted.queue.clone(),
             ready_request,
-            control_mode: persisted.settings.automation.control_mode.clone(),
             logs: persisted.logs.iter().take(80).cloned().collect(),
             bot_status: runtime.bot_status.clone(),
             probe: runtime.probe.clone(),
@@ -190,10 +189,6 @@ impl AppContext {
         self.persisted.read().await.settings.clone()
     }
 
-    pub fn current_settings_blocking(&self) -> crate::models::AppSettings {
-        self.persisted.blocking_read().settings.clone()
-    }
-
     pub async fn save_settings(self: &Arc<Self>, payload: SaveSettingsPayload) -> Result<AppState> {
         let next_settings = {
             let persisted = self.persisted.read().await;
@@ -201,9 +196,6 @@ impl AppContext {
             next.merge_patch(payload);
             next
         };
-
-        self.apply_dispatch_hotkey(&next_settings.automation.dispatch_hotkey)
-            .await?;
 
         {
             let mut persisted = self.persisted.write().await;
@@ -389,15 +381,6 @@ impl AppContext {
     }
 
     pub async fn open_track(&self, payload: OpenTrackPayload) -> CommandResult {
-        let settings = self.current_settings().await;
-        if settings.automation.control_mode == AutomationControlMode::StreamerSafe
-            && !payload.allow_in_streamer_safe_mode.unwrap_or(false)
-        {
-            return CommandResult::error(
-                "Streamer-safe mode blocks Apple Music launch actions. Use Automation Lab or switch to desktop automation.",
-            );
-        }
-
         match self.resolve_track_target(payload).await {
             Ok(target) => match window_shell::open_external(&target) {
                 Ok(_) => {
@@ -680,14 +663,14 @@ impl AppContext {
     async fn ensure_queue_progress(self: &Arc<Self>, reason: &str) {
         self.promote_front_request(reason).await;
 
-        let (settings, request) = {
+        let request = {
             let persisted = self.persisted.read().await;
             let settings = persisted.settings.clone();
             let Some(request) = persisted.queue.first().cloned() else {
                 return;
             };
 
-            if !settings.automation.auto_arm_enabled
+            if !settings.player.auto_queue
                 || request.resolution != crate::models::ResolutionStatus::Matched
                 || request.track.is_none()
                 || request.requires_manual_review
@@ -699,7 +682,7 @@ impl AppContext {
                 return;
             }
 
-            (settings, request)
+            request
         };
 
         {
@@ -711,10 +694,7 @@ impl AppContext {
         }
 
         let track = request.track.as_ref().expect("auto mode requires a track");
-        let outcome = self
-            .player_bridge
-            .dispatch_track(&self.handle, &track.id, &settings.automation.handoff_mode)
-            .await;
+        let outcome = self.player_bridge.dispatch_track(&self.handle, &track.id).await;
 
         let (ok, detail) = match &outcome {
             Ok(summary) => (true, summary.clone()),
@@ -723,7 +703,7 @@ impl AppContext {
         self.add_log(
             if ok { LogLevel::Info } else { LogLevel::Warn },
             format!(
-                "Auto mode dispatch for \"{}\" after {}: {}",
+                "Auto-queue dispatch for \"{}\" after {}: {}",
                 track.title, reason, detail
             ),
         )
@@ -744,8 +724,11 @@ impl AppContext {
         runtime.auto_handoff_in_flight = false;
     }
 
-    async fn promote_front_request(&self, reason: &str) {
-        let settings = self.current_settings().await;
+    /// Keeps the front request's manual-review flag in sync. A matched
+    /// request with no manual review simply stays PendingMatch until it is
+    /// dispatched (auto-queue or the manual "send now" action); there is no
+    /// separate ReadyToSend staging step to promote it into.
+    async fn promote_front_request(&self, _reason: &str) {
         let mut changed = false;
         {
             let mut persisted = self.persisted.write().await;
@@ -753,24 +736,14 @@ impl AppContext {
                 return;
             };
 
-            if front.track.is_none() || front.resolution == ResolutionStatus::ManualReview {
-                if front.handoff_state != QueueHandoffState::ManualReview
-                    || !front.requires_manual_review
-                {
-                    front.handoff_state = QueueHandoffState::ManualReview;
-                    front.requires_manual_review = true;
-                    front.handoff_note =
-                        Some("Manual review required before this request can be sent.".to_string());
-                    front.handoff_updated_at = Some(crate::models::now_iso());
-                    changed = true;
-                }
-            } else if settings.automation.control_mode == AutomationControlMode::StreamerSafe
-                && settings.automation.auto_arm_enabled
-                && front.handoff_state == QueueHandoffState::PendingMatch
+            if (front.track.is_none() || front.resolution == ResolutionStatus::ManualReview)
+                && (front.handoff_state != QueueHandoffState::ManualReview
+                    || !front.requires_manual_review)
             {
-                front.handoff_state = QueueHandoffState::ReadyToSend;
+                front.handoff_state = QueueHandoffState::ManualReview;
+                front.requires_manual_review = true;
                 front.handoff_note =
-                    Some(format!("Auto mode prepared this request after {reason}."));
+                    Some("Manual review required before this request can be sent.".to_string());
                 front.handoff_updated_at = Some(crate::models::now_iso());
                 changed = true;
             }
@@ -782,26 +755,14 @@ impl AppContext {
         }
     }
 
-    pub async fn dispatch_ready_request_from_hotkey(self: &Arc<Self>) -> Result<()> {
-        let settings = self.current_settings().await;
-        if settings.automation.control_mode != AutomationControlMode::StreamerSafe {
-            return Ok(());
-        }
-
-        self.dispatch_request_inner("global hotkey")
-            .await
-            .map(|_| ())
-    }
-
     pub async fn dispatch_next_request(self: &Arc<Self>) -> Result<AppState> {
         self.dispatch_request_inner("dashboard dispatch").await?;
         Ok(self.snapshot().await)
     }
 
     async fn dispatch_request_inner(self: &Arc<Self>, source: &str) -> Result<()> {
-        let (settings, request) = {
+        let request = {
             let persisted = self.persisted.read().await;
-            let settings = persisted.settings.clone();
             let Some(request) = persisted.queue.first().cloned() else {
                 anyhow::bail!("No request is ready to dispatch.");
             };
@@ -819,14 +780,11 @@ impl AppContext {
                 anyhow::bail!("The front request cannot be dispatched right now.");
             }
 
-            (settings, request)
+            request
         };
 
         let track = request.track.as_ref().expect("dispatch requires a track");
-        let outcome = self
-            .player_bridge
-            .dispatch_track(&self.handle, &track.id, &settings.automation.handoff_mode)
-            .await;
+        let outcome = self.player_bridge.dispatch_track(&self.handle, &track.id).await;
 
         let (ok, detail) = match &outcome {
             Ok(summary) => (true, summary.clone()),
@@ -934,32 +892,6 @@ impl AppContext {
         self.save_persisted().await?;
         self.emit_state().await;
         Ok(self.snapshot().await)
-    }
-
-    pub async fn set_dispatch_hotkey(self: &Arc<Self>, shortcut: String) -> Result<AppState> {
-        self.save_settings(SaveSettingsPayload {
-            automation: Some(crate::models::AutomationSettingsPatch {
-                dispatch_hotkey: Some(shortcut),
-                ..Default::default()
-            }),
-            ..Default::default()
-        })
-        .await
-    }
-
-    async fn apply_dispatch_hotkey(&self, shortcut: &str) -> Result<()> {
-        #[cfg(desktop)]
-        {
-            use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
-
-            let shortcut = Shortcut::try_from(shortcut.trim())
-                .map_err(|error| anyhow!("Invalid dispatch hotkey: {error}"))?;
-            let manager = self.handle.global_shortcut();
-            manager.unregister_all()?;
-            manager.register(shortcut)?;
-        }
-
-        Ok(())
     }
 
     async fn resolve_track_target(&self, payload: OpenTrackPayload) -> Result<String> {

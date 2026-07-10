@@ -59,32 +59,6 @@ impl Default for BotConnectionState {
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub enum AutomationHandoffMode {
-    PlayNow,
-    PlayNext,
-}
-
-impl Default for AutomationHandoffMode {
-    fn default() -> Self {
-        Self::PlayNext
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum AutomationControlMode {
-    StreamerSafe,
-    DesktopAutomation,
-}
-
-impl Default for AutomationControlMode {
-    fn default() -> Self {
-        Self::StreamerSafe
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
 pub enum QueueHandoffState {
     PendingMatch,
     ReadyToSend,
@@ -193,33 +167,19 @@ impl Default for AppleMusicSettings {
     }
 }
 
+/// Playback handoff behaviour. Play Next is the only dispatch mode; matched
+/// requests are queued into Apple Music's Playing Next lane and confirmed by
+/// the probe loop once they start playing.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(default, rename_all = "camelCase")]
-pub struct AutomationSettings {
-    #[serde(alias = "controlMode")]
-    pub control_mode: AutomationControlMode,
-    pub experimental_automation_enabled: bool,
-    pub handoff_mode: AutomationHandoffMode,
-    #[serde(default = "default_dispatch_hotkey", alias = "dispatchHotkey")]
-    pub dispatch_hotkey: String,
-    #[serde(alias = "autoModeEnabled")]
-    pub auto_arm_enabled: bool,
+pub struct PlayerSettings {
+    pub auto_queue: bool,
 }
 
-impl Default for AutomationSettings {
+impl Default for PlayerSettings {
     fn default() -> Self {
-        Self {
-            control_mode: AutomationControlMode::StreamerSafe,
-            experimental_automation_enabled: true,
-            handoff_mode: AutomationHandoffMode::PlayNext,
-            dispatch_hotkey: default_dispatch_hotkey(),
-            auto_arm_enabled: false,
-        }
+        Self { auto_queue: true }
     }
-}
-
-fn default_dispatch_hotkey() -> String {
-    "F8".to_string()
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
@@ -228,7 +188,8 @@ pub struct AppSettings {
     pub twitch: TwitchSettings,
     pub request_limits: RequestLimits,
     pub apple_music: AppleMusicSettings,
-    pub automation: AutomationSettings,
+    #[serde(alias = "automation")]
+    pub player: PlayerSettings,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -360,7 +321,6 @@ pub struct AppState {
     pub settings: AppSettings,
     pub queue: Vec<QueueItem>,
     pub ready_request: Option<QueueItem>,
-    pub control_mode: AutomationControlMode,
     pub logs: Vec<LogEntry>,
     pub bot_status: BotStatus,
     pub probe: ProbeSnapshot,
@@ -400,13 +360,8 @@ pub struct AppleMusicSettingsPatch {
 
 #[derive(Clone, Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct AutomationSettingsPatch {
-    pub control_mode: Option<AutomationControlMode>,
-    pub experimental_automation_enabled: Option<bool>,
-    pub handoff_mode: Option<AutomationHandoffMode>,
-    pub dispatch_hotkey: Option<String>,
-    #[serde(alias = "autoModeEnabled")]
-    pub auto_arm_enabled: Option<bool>,
+pub struct PlayerSettingsPatch {
+    pub auto_queue: Option<bool>,
 }
 
 #[derive(Clone, Deserialize, Debug, Default)]
@@ -415,7 +370,7 @@ pub struct SaveSettingsPayload {
     pub twitch: Option<TwitchSettingsPatch>,
     pub request_limits: Option<RequestLimitsPatch>,
     pub apple_music: Option<AppleMusicSettingsPatch>,
-    pub automation: Option<AutomationSettingsPatch>,
+    pub player: Option<PlayerSettingsPatch>,
 }
 
 #[derive(Clone, Deserialize, Debug)]
@@ -451,7 +406,6 @@ pub struct OpenTrackPayload {
     pub request_id: Option<String>,
     pub url: Option<String>,
     pub query: Option<String>,
-    pub allow_in_streamer_safe_mode: Option<bool>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -519,21 +473,9 @@ impl AppSettings {
             }
         }
 
-        if let Some(automation) = patch.automation {
-            if let Some(control_mode) = automation.control_mode {
-                self.automation.control_mode = control_mode;
-            }
-            if let Some(enabled) = automation.experimental_automation_enabled {
-                self.automation.experimental_automation_enabled = enabled;
-            }
-            if let Some(handoff_mode) = automation.handoff_mode {
-                self.automation.handoff_mode = handoff_mode;
-            }
-            if let Some(dispatch_hotkey) = automation.dispatch_hotkey {
-                self.automation.dispatch_hotkey = dispatch_hotkey.trim().to_string();
-            }
-            if let Some(auto_arm_enabled) = automation.auto_arm_enabled {
-                self.automation.auto_arm_enabled = auto_arm_enabled;
+        if let Some(player) = patch.player {
+            if let Some(auto_queue) = player.auto_queue {
+                self.player.auto_queue = auto_queue;
             }
         }
 
@@ -558,11 +500,6 @@ impl AppSettings {
             "us".to_string()
         } else {
             self.apple_music.storefront.trim().to_lowercase()
-        };
-        self.automation.dispatch_hotkey = if self.automation.dispatch_hotkey.trim().is_empty() {
-            "F8".to_string()
-        } else {
-            self.automation.dispatch_hotkey.trim().to_string()
         };
     }
 }
@@ -618,10 +555,15 @@ pub fn compact_log_message(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{AutomationControlMode, AutomationHandoffMode, PersistedState};
+    use super::PersistedState;
 
+    /// Old alpha state.json files persisted a full "automation" object
+    /// (adapter, controlMode, handoffMode, dispatchHotkey, autoArmEnabled).
+    /// That shape no longer matches PlayerSettings, so the aliased `player`
+    /// field should simply fall back to its default (auto_queue: true)
+    /// rather than erroring out or trying to translate old values.
     #[test]
-    fn persisted_state_defaults_missing_handoff_mode() {
+    fn persisted_state_defaults_player_settings_from_legacy_automation_blob() {
         let state: PersistedState = serde_json::from_str(
             r#"{
                 "settings": {
@@ -646,7 +588,11 @@ mod tests {
                     },
                     "automation": {
                         "adapter": "ui-automation",
-                        "experimentalAutomationEnabled": true
+                        "controlMode": "streamer-safe",
+                        "experimentalAutomationEnabled": true,
+                        "handoffMode": "play-next",
+                        "dispatchHotkey": "F8",
+                        "autoArmEnabled": false
                     }
                 },
                 "queue": [],
@@ -655,16 +601,43 @@ mod tests {
         )
         .expect("legacy-compatible state should deserialize");
 
-        assert!(state.settings.automation.experimental_automation_enabled);
-        assert_eq!(
-            state.settings.automation.control_mode,
-            AutomationControlMode::StreamerSafe
-        );
-        assert_eq!(
-            state.settings.automation.handoff_mode,
-            AutomationHandoffMode::PlayNext
-        );
-        assert_eq!(state.settings.automation.dispatch_hotkey, "F8");
-        assert!(!state.settings.automation.auto_arm_enabled);
+        assert!(state.settings.player.auto_queue);
+    }
+
+    #[test]
+    fn persisted_state_reads_new_player_settings_shape() {
+        let state: PersistedState = serde_json::from_str(
+            r#"{
+                "settings": {
+                    "twitch": {
+                        "channel": "kerdylives",
+                        "botUsername": "kerdyknives",
+                        "oauthToken": "oauth:test",
+                        "requestCommand": "!sr",
+                        "autoConnect": true
+                    },
+                    "requestLimits": {
+                        "maxQueueSize": 25,
+                        "maxPerUser": 2,
+                        "cooldownSeconds": 120,
+                        "allowDuplicates": false,
+                        "allowLinks": true,
+                        "modsBypassLimits": true,
+                        "maxTrackMinutes": 10
+                    },
+                    "appleMusic": {
+                        "storefront": "us"
+                    },
+                    "player": {
+                        "autoQueue": false
+                    }
+                },
+                "queue": [],
+                "logs": []
+            }"#,
+        )
+        .expect("current-shape state should deserialize");
+
+        assert!(!state.settings.player.auto_queue);
     }
 }

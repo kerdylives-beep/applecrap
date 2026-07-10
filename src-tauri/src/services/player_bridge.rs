@@ -10,7 +10,7 @@ use tauri::{AppHandle, Manager};
 use tokio::sync::{oneshot, Mutex, RwLock};
 
 use crate::{
-    models::{AutomationHandoffMode, ProbeSession, ProbeSnapshot, QueueItem},
+    models::{ProbeSession, ProbeSnapshot, QueueItem},
     services::queue_engine::{normalize_text, token_overlap},
 };
 
@@ -175,17 +175,10 @@ impl PlayerBridge {
         }
     }
 
-    pub async fn dispatch_track(
-        &self,
-        handle: &AppHandle,
-        track_id: &str,
-        mode: &AutomationHandoffMode,
-    ) -> Result<String> {
-        let op = match mode {
-            AutomationHandoffMode::PlayNow => "playNow",
-            AutomationHandoffMode::PlayNext => "queueNext",
-        };
-        self.run_command(handle, op, Some(track_id)).await
+    /// Queue a track as Play Next. This is the only dispatch behaviour AppleCrap
+    /// uses: requests are always queued rather than interrupting playback.
+    pub async fn dispatch_track(&self, handle: &AppHandle, track_id: &str) -> Result<String> {
+        self.run_command(handle, "queueNext", Some(track_id)).await
     }
 
     /// Build a ProbeSnapshot from the latest bridge status so the existing
