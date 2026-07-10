@@ -5,7 +5,9 @@ use serde::Deserialize;
 
 use crate::{
     models::{AppleMusicSettings, TrackMatch},
-    services::queue_engine::{extract_apple_music_track_id, is_url, normalize_text, token_overlap},
+    services::queue_engine::{
+        extract_apple_music_track_id, is_url, normalize_text, strip_featuring, token_overlap,
+    },
 };
 
 const ITUNES_SEARCH_BASE: &str = "https://itunes.apple.com/search";
@@ -303,6 +305,11 @@ const IMITATION_MARKERS: &[&str] = &[
     "cover version",
     "instrumental version",
     "backing track",
+    "lullaby",
+    "rockabye",
+    "kidz bop",
+    "music box version",
+    "8 bit",
 ];
 
 fn imitation_penalty(query_normalized: &str, title: &str, artist: &str, album: &str) -> i32 {
@@ -326,8 +333,10 @@ fn imitation_penalty(query_normalized: &str, title: &str, artist: &str, album: &
 }
 
 fn score_track(query: &str, song: &ItunesSong) -> i32 {
-    let query_normalized = normalize_text(query);
-    let title = normalize_text(song.track_name.as_deref().unwrap_or_default());
+    let query_normalized = strip_featuring(&normalize_text(query));
+    let title = strip_featuring(&normalize_text(
+        song.track_name.as_deref().unwrap_or_default(),
+    ));
     let artist = normalize_text(song.artist_name.as_deref().unwrap_or_default());
     let album = normalize_text(song.collection_name.as_deref().unwrap_or_default());
     let mut score = imitation_penalty(&query_normalized, &title, &artist, &album);
@@ -409,8 +418,8 @@ fn score_track(query: &str, song: &ItunesSong) -> i32 {
 }
 
 fn score_web_track(query: &str, track: &TrackMatch) -> i32 {
-    let query_normalized = normalize_text(query);
-    let title = normalize_text(&track.title);
+    let query_normalized = strip_featuring(&normalize_text(query));
+    let title = strip_featuring(&normalize_text(&track.title));
     let artist = normalize_text(&track.artist_name);
     let mut score = imitation_penalty(&query_normalized, &title, &artist, "");
 
@@ -503,6 +512,32 @@ mod tests {
         let query = "human nature michael jackson";
         assert!(score_track(query, &real) > score_track(query, &karaoke_exact_title));
         assert!(score_track(query, &real) > score_track(query, &karaoke_styled));
+    }
+
+    #[test]
+    fn featured_artist_title_outranks_lullaby_cover() {
+        // Real-world failure: "Uptown Funk Bruno Mars" matched the Rockabye
+        // Baby! lullaby because the real track credits Mark Ronson with Bruno
+        // Mars only in the title's feat clause.
+        let real = ItunesSong {
+            wrapper_type: Some("track".to_string()),
+            kind: Some("song".to_string()),
+            track_name: Some("Uptown Funk (feat. Bruno Mars)".to_string()),
+            artist_name: Some("Mark Ronson".to_string()),
+            collection_name: Some("Uptown Special".to_string()),
+            ..Default::default()
+        };
+        let lullaby = ItunesSong {
+            wrapper_type: Some("track".to_string()),
+            kind: Some("song".to_string()),
+            track_name: Some("Uptown Funk".to_string()),
+            artist_name: Some("Rockabye Baby!".to_string()),
+            collection_name: Some("Lullaby Renditions of Bruno Mars".to_string()),
+            ..Default::default()
+        };
+
+        let query = "uptown funk bruno mars";
+        assert!(score_track(query, &real) > score_track(query, &lullaby));
     }
 
     #[test]

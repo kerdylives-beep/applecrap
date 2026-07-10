@@ -22,6 +22,17 @@ pub fn normalize_text(value: &str) -> String {
         .join(" ")
 }
 
+/// Remove featuring markers ("feat", "featuring", "ft") from already
+/// normalized text so "Uptown Funk (feat. Bruno Mars)" compares equal to a
+/// query like "uptown funk bruno mars".
+pub fn strip_featuring(normalized: &str) -> String {
+    normalized
+        .split_whitespace()
+        .filter(|token| !matches!(*token, "feat" | "featuring" | "ft"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub fn is_url(value: &str) -> bool {
     value.starts_with("http://") || value.starts_with("https://")
 }
@@ -163,10 +174,10 @@ pub fn build_queue_item(
 }
 
 pub fn estimate_match_confidence(query: &str, title: &str, artist: &str) -> f32 {
-    let query_normalized = normalize_text(query);
-    let title_normalized = normalize_text(title);
+    let query_normalized = strip_featuring(&normalize_text(query));
+    let title_normalized = strip_featuring(&normalize_text(title));
     let artist_normalized = normalize_text(artist);
-    let combined = normalize_text(&format!("{artist} {title}"));
+    let combined = strip_featuring(&normalize_text(&format!("{artist} {title}")));
 
     let exact_bonus = if query_normalized == title_normalized || query_normalized == combined {
         0.3
