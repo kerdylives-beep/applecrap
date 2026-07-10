@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   approveRequest,
   bindAppEvents,
@@ -10,27 +10,13 @@ import {
   enqueueManualRequest,
   exportDiagnostics,
   importLegacyState,
-  openTrack,
   removeRequest,
   revealDataFolder,
-  runAutomationStep,
-  runProbe,
   saveSettings,
   searchAppleMusic,
   sendRequestToManualReview,
-  setDispatchHotkey,
 } from './tauri'
-import type {
-  AppSettings,
-  AppState,
-  ApproveRequestPayload,
-  AutomationAction,
-  AutomationAdapterKind,
-  CommandResult,
-  PanelKey,
-  QueueItem,
-  SearchResult,
-} from './types'
+import type { AppSettings, AppState, CommandResult, PanelKey, SearchResult, TrackMatch } from './types'
 import { buildDebugSummary, buildFeedbackMailto } from './utils'
 
 const defaultSettings: AppSettings = {
@@ -53,13 +39,8 @@ const defaultSettings: AppSettings = {
   appleMusic: {
     storefront: 'us',
   },
-  automation: {
-    adapter: 'ui-automation',
-    controlMode: 'streamer-safe',
-    experimentalAutomationEnabled: true,
-    handoffMode: 'play-next',
-    dispatchHotkey: 'F8',
-    autoArmEnabled: false,
+  player: {
+    autoQueue: true,
   },
 }
 
@@ -212,19 +193,19 @@ export function useAppStore() {
     }
   }
 
-  const setAutoArmEnabled = async (enabled: boolean) => {
+  const setAutoQueueEnabled = async (enabled: boolean) => {
     setSettingsDraft((current) => ({
       ...current,
-      automation: {
-        ...current.automation,
-        autoArmEnabled: enabled,
+      player: {
+        ...current.player,
+        autoQueue: enabled,
       },
     }))
 
-    const nextState = await runAction('toggle-auto-arm', () =>
+    const nextState = await runAction('toggle-auto-queue', () =>
       saveSettings({
-        automation: {
-          autoArmEnabled: enabled,
+        player: {
+          autoQueue: enabled,
         },
       }),
     )
@@ -233,7 +214,7 @@ export function useAppStore() {
       setState(nextState)
       setSettingsDraft(nextState.settings)
       hydratedDraft.current = true
-      setNotice(enabled ? 'Auto mode enabled.' : 'Auto mode disabled.')
+      setNotice(enabled ? 'Auto-queue enabled.' : 'Auto-queue paused.')
     }
   }
 
@@ -317,157 +298,6 @@ export function useAppStore() {
     }
   }
 
-  const openSelectedTrack = async (
-    item?: QueueItem | null,
-    url?: string,
-    allowInStreamerSafeMode = false,
-  ) => {
-    const result = await runAction('open-track', () =>
-      openTrack({
-        requestId: item?.id ?? selectedRequest?.id ?? null,
-        query: item?.query ?? selectedRequest?.query ?? null,
-        url: url ?? item?.track?.url ?? selectedRequest?.track?.url ?? null,
-        allowInStreamerSafeMode,
-      }),
-    )
-
-    if (result) {
-      applyResultNotice(result)
-      await refreshState(true)
-    }
-  }
-
-  const openAndPlaySelectedTrack = async (item?: QueueItem | null) => {
-    if (
-      !settingsDraft.automation.experimentalAutomationEnabled ||
-      settingsDraft.automation.adapter !== 'ui-automation'
-    ) {
-      setNotice('Open + play is only available with the experimental UI automation adapter enabled.')
-      return
-    }
-
-    const result = await runAction('open-and-play', () =>
-      runAutomationStep({
-        adapter: 'ui-automation',
-        action: 'attempt_play',
-        requestId: item?.id ?? selectedRequest?.id ?? null,
-        dryRun: false,
-        allowInStreamerSafeMode: false,
-      }),
-    )
-
-    if (result) {
-      applyResultNotice(result)
-      await refreshState(true)
-    }
-  }
-
-  const queueNextSelectedTrack = async (item?: QueueItem | null) => {
-    if (
-      !settingsDraft.automation.experimentalAutomationEnabled ||
-      settingsDraft.automation.adapter !== 'ui-automation'
-    ) {
-      setNotice('Play next is only available with the experimental UI automation adapter enabled.')
-      return
-    }
-
-    const result = await runAction('queue-next', () =>
-      runAutomationStep({
-        adapter: 'ui-automation',
-        action: 'attempt_queue_action',
-        requestId: item?.id ?? selectedRequest?.id ?? null,
-        dryRun: false,
-        allowInStreamerSafeMode: false,
-      }),
-    )
-
-    if (result) {
-      applyResultNotice(result)
-      await refreshState(true)
-    }
-  }
-
-  const handoffSelectedTrack = async (item?: QueueItem | null, url?: string) => {
-    const targetItem = item ?? selectedRequest
-    const controlMode = settingsDraft.automation.controlMode
-
-    if (!url && targetItem && !targetItem.track) {
-      setNotice('This request needs review first. Search Apple Music and approve a match.')
-      return
-    }
-
-    if (!targetItem && !url) {
-      setNotice('No request is selected.')
-      return
-    }
-
-    if (controlMode === 'streamer-safe') {
-      if (!url && targetItem.track && !targetItem.requiresManualReview) {
-        await dispatchReadyRequest()
-        return
-      }
-
-      const nextState = await runAction('approve-request', () =>
-        approveRequest({
-          requestId: targetItem?.id ?? selectedRequest?.id ?? null,
-          track: url
-            ? (searchResults?.matches.find((match) => match.url === url) ?? null)
-            : null,
-        } satisfies ApproveRequestPayload),
-      )
-      if (nextState) {
-        setState(nextState)
-        setNotice('Request is ready to dispatch.')
-      }
-      return
-    }
-
-    if (!url && targetItem?.handoffState === 'sent-to-player') {
-      setNotice('This request is already staged in Apple Music and is waiting for playback confirmation.')
-      return
-    }
-
-    if (!url && settingsDraft.automation.experimentalAutomationEnabled && settingsDraft.automation.adapter === 'ui-automation') {
-      if (settingsDraft.automation.handoffMode === 'play-next') {
-        await queueNextSelectedTrack(targetItem)
-      } else {
-        await openAndPlaySelectedTrack(targetItem)
-      }
-      return
-    }
-
-    await openSelectedTrack(targetItem, url)
-  }
-
-  const rerunProbe = async () => {
-    const result = await runAction('run-probe', runProbe)
-    if (result) {
-      setNotice(result.snapshot.lastError ?? 'Playback probe refreshed.')
-      await refreshState(true)
-    }
-  }
-
-  const executeAutomation = async (
-    adapter: AutomationAdapterKind,
-    action: AutomationAction,
-    requestId?: string | null,
-  ) => {
-    const result = await runAction('run-automation', () =>
-      runAutomationStep({
-        adapter,
-        action,
-        requestId: requestId ?? selectedRequest?.id ?? null,
-        dryRun: action === 'dry_run',
-        allowInStreamerSafeMode: true,
-      }),
-    )
-
-    if (result) {
-      applyResultNotice(result)
-      await refreshState(true)
-    }
-  }
-
   const copyDebugSummary = async () => {
     if (!state) {
       return
@@ -524,15 +354,15 @@ export function useAppStore() {
     }
   }
 
-  const dispatchReadyRequest = async () => {
+  const dispatchFeaturedRequest = async () => {
     const nextState = await runAction('dispatch-next', dispatchNextRequest)
     if (nextState) {
       setState(nextState)
-      setNotice('Triggered Apple Music automation for the front request.')
+      setNotice('Sent the front request to Apple Music.')
     }
   }
 
-  const approveSelectedRequest = async (track?: QueueItem['track']) => {
+  const approveSelectedRequest = async (track?: TrackMatch | null) => {
     const nextState = await runAction('approve-request', () =>
       approveRequest({
         requestId: selectedRequest?.id ?? null,
@@ -559,30 +389,6 @@ export function useAppStore() {
     }
   }
 
-  const updateDispatchHotkey = async (shortcut: string) => {
-    setSettingsDraft((current) => ({
-      ...current,
-      automation: {
-        ...current.automation,
-        dispatchHotkey: shortcut,
-      },
-    }))
-
-    const nextState = await runAction('dispatch-hotkey', () => setDispatchHotkey(shortcut))
-    if (nextState) {
-      setState(nextState)
-      setSettingsDraft(nextState.settings)
-      hydratedDraft.current = true
-      setNotice(`Dispatch hotkey saved as ${nextState.settings.automation.dispatchHotkey}.`)
-    }
-  }
-
-  const currentAdapter = settingsDraft.automation.adapter
-  const selectedCapabilities = useMemo(
-    () => state?.automation.capabilities.find((item) => item.adapter === currentAdapter) ?? null,
-    [currentAdapter, state?.automation.capabilities],
-  )
-
   return {
     state,
     settingsDraft,
@@ -602,25 +408,17 @@ export function useAppStore() {
     searchResults,
     notice,
     busyAction,
-    selectedCapabilities,
     saveDraftSettings,
-    setAutoArmEnabled,
+    setAutoQueueEnabled,
     startBot,
     stopBot,
     submitManualRequest,
     removeQueueItem,
     wipeQueue,
     runSearch,
-    handoffSelectedTrack,
-    openSelectedTrack,
-    openAndPlaySelectedTrack,
-    queueNextSelectedTrack,
     approveSelectedRequest,
     moveSelectedRequestToManualReview,
-    dispatchReadyRequest,
-    updateDispatchHotkey,
-    rerunProbe,
-    executeAutomation,
+    dispatchFeaturedRequest,
     copyDebugSummary,
     openFeedbackDraft,
     exportLogsAndState,

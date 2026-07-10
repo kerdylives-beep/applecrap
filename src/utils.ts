@@ -1,4 +1,54 @@
-import type { AppState, LogEntry, QueueItem } from './types'
+import type { AppState, LogEntry, ProbeSnapshot, QueueItem } from './types'
+
+export type PlayerConnectionState = 'connected' | 'loading' | 'sign-in-required' | 'disconnected'
+
+/**
+ * Derives the embedded player's connection state from the probe snapshot.
+ * The player bridge tags every report with source "apple-music-web" once
+ * it has heard from the player window at least once; before that (or if
+ * the window has gone away) the probe stays at its idle default.
+ */
+export function playerConnectionState(probe: ProbeSnapshot): PlayerConnectionState {
+  if (probe.source !== 'apple-music-web') {
+    return 'disconnected'
+  }
+
+  switch (probe.status) {
+    case 'SignInRequired':
+      return 'sign-in-required'
+    case 'Loading':
+      return 'loading'
+    case 'Disconnected':
+      return 'disconnected'
+    default:
+      return 'connected'
+  }
+}
+
+export function playerStatusLabel(state: PlayerConnectionState) {
+  switch (state) {
+    case 'connected':
+      return 'Connected'
+    case 'loading':
+      return 'Loading'
+    case 'sign-in-required':
+      return 'Sign-in required'
+    case 'disconnected':
+      return 'Disconnected'
+  }
+}
+
+export function playerNowPlayingLine(probe: ProbeSnapshot) {
+  if (probe.title) {
+    return probe.artist ? `${probe.title} — ${probe.artist}` : probe.title
+  }
+
+  if (probe.status && probe.status !== 'Unknown') {
+    return probe.status
+  }
+
+  return 'Nothing playing yet.'
+}
 
 export function formatDuration(durationMs: number | null) {
   if (!durationMs) {
@@ -112,12 +162,8 @@ export function buildDebugSummary(state: AppState) {
     `Command: ${state.settings.twitch.requestCommand || '!request'}`,
     `Links: ${state.settings.requestLimits.allowLinks ? 'allowed' : 'blocked'}`,
     `Queue: ${state.stats.totalRequests} item(s)`,
-    `Probe: ${state.probe.status || 'Unknown'}`,
-    `Adapter: ${state.automation.activeAdapter}`,
-    `Control mode: ${state.controlMode}`,
-    `Auto arm: ${state.settings.automation.autoArmEnabled ? 'on' : 'off'}`,
-    `Handoff: ${state.settings.automation.handoffMode}`,
-    `Dispatch hotkey: ${state.settings.automation.dispatchHotkey}`,
+    `Probe: ${state.probe.status || 'Unknown'} (${state.probe.source || 'idle'})`,
+    `Auto-queue: ${state.settings.player.autoQueue ? 'on' : 'off'}`,
   ].join('\n')
 
   return [headline, '', logSummary(state.logs)].join('\n')

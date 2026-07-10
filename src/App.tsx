@@ -9,6 +9,9 @@ import {
   emptyStateMessage,
   formatDuration,
   formatTimestamp,
+  playerConnectionState,
+  playerNowPlayingLine,
+  playerStatusLabel,
   queueHeadline,
   queueStatusLabel,
   queueStatusTone,
@@ -20,7 +23,6 @@ type LogFilter = 'all' | LogLevel
 const utilityPanels: Array<{ key: Exclude<PanelKey, 'dashboard'>; label: string }> = [
   { key: 'bot', label: 'Bot' },
   { key: 'rules', label: 'Rules' },
-  { key: 'automation', label: 'Automation' },
   { key: 'now-playing', label: 'Now Playing' },
   { key: 'logs', label: 'Logs' },
   { key: 'about', label: 'About' },
@@ -96,18 +98,12 @@ function StatusChip({
 function QueueRow({
   item,
   active,
-  openLabel,
-  openDisabled,
   onSelect,
-  onOpen,
   onRemove,
 }: {
   item: QueueItem
   active: boolean
-  openLabel: string
-  openDisabled: boolean
   onSelect: () => void
-  onOpen: () => void
   onRemove: () => void
 }) {
   return (
@@ -122,17 +118,6 @@ function QueueRow({
         <span className={styles.queueTime}>{formatTimestamp(item.submittedAt)}</span>
       </div>
       <div className={styles.queueActions}>
-        <button
-          type="button"
-          className={styles.secondaryButton}
-          disabled={openDisabled}
-          onClick={(event) => {
-            event.stopPropagation()
-            onOpen()
-          }}
-        >
-          {openLabel}
-        </button>
         <button
           type="button"
           className={styles.ghostButton}
@@ -248,77 +233,20 @@ function App() {
   const queue = state.queue
   const featuredRequest = store.featuredRequest
   const requestCommand = state.settings.twitch.requestCommand || '!request'
-  const controlMode = store.settingsDraft.automation.controlMode
-  const experimentalOpenAndPlayEnabled =
-    store.settingsDraft.automation.experimentalAutomationEnabled &&
-    store.settingsDraft.automation.adapter === 'ui-automation'
-  const autoArmEnabled = store.settingsDraft.automation.autoArmEnabled
-  const experimentalPlayNextEnabled =
-    experimentalOpenAndPlayEnabled && store.settingsDraft.automation.handoffMode === 'play-next'
+  const autoQueueEnabled = store.settingsDraft.player.autoQueue
   const modalPanel = store.activePanel === 'dashboard' ? null : store.activePanel
-  const primaryHandoffLabel =
-    controlMode === 'streamer-safe'
-      ? 'Dispatch'
-      : experimentalOpenAndPlayEnabled
-        ? experimentalPlayNextEnabled
-          ? 'Play next'
-          : 'Open + play'
-        : 'Open in Apple Music'
   const stagedRequests = queue.filter((item) => item.handoffState === 'sent-to-player').length
   const waitingRequests = queue.filter((item) => item.handoffState === 'pending-match').length
 
-  const getQueueActionLabel = (item: QueueItem) => {
-    if (controlMode === 'streamer-safe') {
-      if (item.handoffState === 'manual-review' || item.requiresManualReview || !item.track) {
-        return 'Review'
-      }
-      if (item.handoffState === 'ready-to-send') {
-        return 'Ready'
-      }
-      if (item.handoffState === 'sent-to-player') {
-        return 'Sent'
-      }
-      if (item.handoffState === 'failed-dispatch') {
-        return 'Retry'
-      }
-      return 'Dispatch'
-    }
+  const playerState = playerConnectionState(state.probe)
+  const playerSignInRequired = playerState === 'sign-in-required'
+  const playerTone = playerState === 'connected' ? 'good' : playerSignInRequired ? 'warn' : 'neutral'
 
-    if (!item.track) {
-      return 'Review'
-    }
+  const featuredCanDispatch =
+    Boolean(featuredRequest?.track) &&
+    !featuredRequest?.requiresManualReview &&
+    !['sent-to-player', 'confirmed-playing'].includes(featuredRequest?.handoffState ?? '')
 
-    if (experimentalOpenAndPlayEnabled && item.handoffState === 'sent-to-player') {
-      return experimentalPlayNextEnabled ? 'Queued' : 'Sent'
-    }
-
-    if (item.handoffState === 'failed-dispatch') {
-      return 'Retry'
-    }
-
-    if (experimentalOpenAndPlayEnabled) {
-      return experimentalPlayNextEnabled ? 'Queue next' : 'Play'
-    }
-
-    return 'Open'
-  }
-
-  const canTriggerHandoff = (item?: QueueItem | null) =>
-    controlMode === 'streamer-safe'
-      ? Boolean(item) &&
-        !['ready-to-send', 'sent-to-player', 'confirmed-playing'].includes(
-          item ? item.handoffState : 'pending-match',
-        )
-      : !experimentalOpenAndPlayEnabled || item?.handoffState !== 'sent-to-player'
-
-  const featuredCanTriggerHandoff =
-    controlMode === 'streamer-safe'
-      ? Boolean(featuredRequest?.track) &&
-        !featuredRequest?.requiresManualReview &&
-        ['pending-match', 'ready-to-send', 'failed-dispatch'].includes(featuredRequest.handoffState)
-      : Boolean(featuredRequest) && canTriggerHandoff(featuredRequest)
-
-  const featuredActionLabel = featuredRequest ? getQueueActionLabel(featuredRequest) : primaryHandoffLabel
   const requestLinksLabel = state.settings.requestLimits.allowLinks ? 'Allowed' : 'Blocked'
   const degradedNotices = [
     state.storage.warning,
@@ -357,6 +285,10 @@ function App() {
   const stopTitleEvent = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault()
     event.stopPropagation()
+  }
+
+  const showPlayer = () => {
+    void invoke('player_show')
   }
 
   return (
@@ -416,7 +348,7 @@ function App() {
                     {panel.label}
                   </button>
                 ))}
-                <button className={styles.menuTextButton} onClick={() => void invoke('player_show')}>
+                <button className={styles.menuTextButton} onClick={showPlayer}>
                   Player ↗
                 </button>
               </div>
@@ -442,211 +374,203 @@ function App() {
 
           <section className={styles.mainColumn}>
             <SectionFrame
-            title={featuredRequest ? queueHeadline(featuredRequest) : 'Queue is clear'}
-            eyebrow="Primary item"
-            actions={
-              <div className={styles.sectionActionsInline}>
-                <button className={styles.ghostButton} onClick={store.rerunProbe}>
-                  Refresh probe
-                </button>
-                <label className={styles.actionToggle}>
-                  <input
-                    type="checkbox"
-                    checked={autoArmEnabled}
-                    onChange={(event) => {
-                      void store.setAutoArmEnabled(event.target.checked)
-                    }}
-                  />
-                  <span>Auto</span>
-                </label>
-                {controlMode === 'streamer-safe' && featuredRequest ? (
-                  <button className={styles.ghostButton} onClick={store.moveSelectedRequestToManualReview}>
-                    Send to review
-                  </button>
-                ) : null}
+              title="Apple Music Player"
+              eyebrow="Connection"
+              actions={
                 <button
-                  className={styles.primaryButton}
-                  disabled={!featuredCanTriggerHandoff}
-                  onClick={() =>
-                    controlMode === 'streamer-safe'
-                      ? void store.dispatchReadyRequest()
-                      : void store.handoffSelectedTrack(featuredRequest)
-                  }
+                  className={playerSignInRequired ? styles.primaryButton : styles.secondaryButton}
+                  onClick={showPlayer}
                 >
-                  {controlMode === 'streamer-safe' ? primaryHandoffLabel : featuredActionLabel}
+                  {playerSignInRequired ? 'Open player to sign in' : 'Show player'}
                 </button>
+              }
+            >
+              <div className={cx(styles.noticeStrip, playerSignInRequired && styles.noticeStripWarn)}>
+                <strong>
+                  <StatusChip label={playerStatusLabel(playerState)} tone={playerTone} />
+                </strong>
+                <span>{playerNowPlayingLine(state.probe)}</span>
               </div>
-            }
-          >
-            {featuredRequest ? (
-              <div className={styles.featureSurface}>
-                <div className={styles.featureArt}>
-                  {featuredRequest.track?.artworkUrl ? (
-                    <img src={featuredRequest.track.artworkUrl} alt="" />
-                  ) : (
-                    <div className={styles.heroFallback}>On deck</div>
-                  )}
+            </SectionFrame>
+
+            <SectionFrame
+              title={featuredRequest ? queueHeadline(featuredRequest) : 'Queue is clear'}
+              eyebrow="Primary item"
+              actions={
+                <div className={styles.sectionActionsInline}>
+                  <label className={styles.actionToggle}>
+                    <input
+                      type="checkbox"
+                      checked={autoQueueEnabled}
+                      onChange={(event) => {
+                        void store.setAutoQueueEnabled(event.target.checked)
+                      }}
+                    />
+                    <span>Auto-queue requests</span>
+                  </label>
+                  {featuredRequest ? (
+                    <button className={styles.ghostButton} onClick={store.moveSelectedRequestToManualReview}>
+                      Send to review
+                    </button>
+                  ) : null}
+                  <button
+                    className={styles.primaryButton}
+                    disabled={!featuredCanDispatch}
+                    onClick={() => void store.dispatchFeaturedRequest()}
+                  >
+                    Send now
+                  </button>
                 </div>
-                <div className={styles.featureBody}>
-                  <div className={styles.metaStrip}>
-                    <Pill label="Requester" value={`@${featuredRequest.requestedBy}`} />
-                    <Pill label="Queue state" value={queueStatusLabel(featuredRequest)} tone={queueStatusTone(featuredRequest)} />
-                    <Pill label="Hotkey" value={state.settings.automation.dispatchHotkey} />
-                    <Pill label="Auto mode" value={autoArmEnabled ? 'On' : 'Hotkey'} tone={autoArmEnabled ? 'good' : 'neutral'} />
+              }
+            >
+              {featuredRequest ? (
+                <div className={styles.featureSurface}>
+                  <div className={styles.featureArt}>
+                    {featuredRequest.track?.artworkUrl ? (
+                      <img src={featuredRequest.track.artworkUrl} alt="" />
+                    ) : (
+                      <div className={styles.heroFallback}>On deck</div>
+                    )}
                   </div>
-                  <p className={styles.featureSummary}>
-                    {featuredRequest.track
-                      ? `${featuredRequest.track.albumName || 'Apple Music match'} | ${formatDuration(featuredRequest.track.durationMs)}`
-                      : 'Review this request against Apple Music before sending it forward.'}
-                  </p>
-                  <div className={styles.metaStrip}>
-                    <Pill label="Waiting" value={String(waitingRequests)} />
-                    <Pill label="Staged" value={String(stagedRequests)} tone={stagedRequests ? 'good' : 'neutral'} />
-                    <Pill label="Mode" value={controlMode === 'streamer-safe' ? 'Streamer-safe' : experimentalPlayNextEnabled ? 'Play next' : primaryHandoffLabel} />
-                    <Pill label="Confidence" value={featuredRequest.matchConfidence !== null ? `${Math.round(featuredRequest.matchConfidence * 100)}%` : 'Unknown'} />
-                  </div>
-                  <div className={styles.noticeStrip}>
-                    <strong>
-                      {controlMode === 'streamer-safe'
-                        ? 'Deliberate dispatch mode'
-                        : state.probe.matched
-                          ? 'Playback confirmed'
-                          : 'Waiting for playback confirmation'}
-                    </strong>
-                    <span>
-                      {controlMode === 'streamer-safe'
-                        ? featuredRequest.track
-                          ? autoArmEnabled
+                  <div className={styles.featureBody}>
+                    <div className={styles.metaStrip}>
+                      <Pill label="Requester" value={`@${featuredRequest.requestedBy}`} />
+                      <Pill label="Queue state" value={queueStatusLabel(featuredRequest)} tone={queueStatusTone(featuredRequest)} />
+                      <Pill label="Auto-queue" value={autoQueueEnabled ? 'On' : 'Paused'} tone={autoQueueEnabled ? 'good' : 'neutral'} />
+                    </div>
+                    <p className={styles.featureSummary}>
+                      {featuredRequest.track
+                        ? `${featuredRequest.track.albumName || 'Apple Music match'} | ${formatDuration(featuredRequest.track.durationMs)}`
+                        : 'Review this request against Apple Music before sending it forward.'}
+                    </p>
+                    <div className={styles.metaStrip}>
+                      <Pill label="Waiting" value={String(waitingRequests)} />
+                      <Pill label="Staged" value={String(stagedRequests)} tone={stagedRequests ? 'good' : 'neutral'} />
+                      <Pill label="Confidence" value={featuredRequest.matchConfidence !== null ? `${Math.round(featuredRequest.matchConfidence * 100)}%` : 'Unknown'} />
+                    </div>
+                    <div className={styles.noticeStrip}>
+                      <strong>
+                        {state.probe.matched ? 'Playback confirmed' : 'Waiting for playback confirmation'}
+                      </strong>
+                      <span>
+                        {featuredRequest.track
+                          ? autoQueueEnabled
                             ? 'AppleCrap will queue matched requests automatically.'
-                            : `Press ${state.settings.automation.dispatchHotkey} when you want Apple Music to queue this request.`
-                          : 'Pick an Apple Music match before dispatching this request.'
-                        : state.probe.title
-                          ? `${state.probe.title} | ${state.probe.artist} (${Math.round(state.probe.confidence * 100)}% confidence)`
-                          : 'No compatible Apple Music playback session detected yet.'}
-                    </span>
+                            : 'Auto-queue is paused. Use Send now when you want Apple Music to queue this request.'
+                          : 'Pick an Apple Music match before dispatching this request.'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className={styles.heroEmpty}>
-                <p>{emptyStateMessage(requestCommand)}</p>
-                <div className={styles.metaStrip}>
-                  <Pill label="Command" value={requestCommand} />
-                  <Pill label="Queue" value={`${state.stats.totalRequests} request(s)`} />
-                  <Pill label="Channel" value={state.botStatus.channel || 'Not configured'} />
-                  <Pill label="Auto mode" value={autoArmEnabled ? 'On' : 'Hotkey'} tone={autoArmEnabled ? 'good' : 'neutral'} />
-                </div>
-              </div>
-            )}
-            </SectionFrame>
-
-            <SectionFrame
-            title="Queue"
-            eyebrow="Live lane"
-            actions={
-              <div className={styles.sectionActionsInline}>
-                <button className={styles.ghostButton} onClick={store.wipeQueue}>
-                  Clear queue
-                </button>
-                <button className={styles.ghostButton} onClick={() => openPanel('now-playing')}>
-                  Probe
-                </button>
-              </div>
-            }
-          >
-            <div className={styles.queueHead}>
-              <span>Track</span>
-              <span>Requester</span>
-              <span>Status</span>
-              <span>Time</span>
-              <span>Actions</span>
-            </div>
-            <div className={styles.queueBody}>
-              {queue.length ? (
-                queue.map((item) => (
-                  <QueueRow
-                    key={item.id}
-                    item={item}
-                    active={store.selectedRequestId === item.id}
-                    openLabel={getQueueActionLabel(item)}
-                    openDisabled={
-                      controlMode === 'streamer-safe'
-                        ? item.handoffState === 'sent-to-player' || item.handoffState === 'confirmed-playing'
-                        : !canTriggerHandoff(item)
-                    }
-                    onSelect={() => store.setSelectedRequestId(item.id)}
-                    onOpen={() => store.handoffSelectedTrack(item)}
-                    onRemove={() => store.removeQueueItem(item.id)}
-                  />
-                ))
               ) : (
-                <p className={styles.emptyCopy}>No requests are active right now.</p>
+                <div className={styles.heroEmpty}>
+                  <p>{emptyStateMessage(requestCommand)}</p>
+                  <div className={styles.metaStrip}>
+                    <Pill label="Command" value={requestCommand} />
+                    <Pill label="Queue" value={`${state.stats.totalRequests} request(s)`} />
+                    <Pill label="Channel" value={state.botStatus.channel || 'Not configured'} />
+                    <Pill label="Auto-queue" value={autoQueueEnabled ? 'On' : 'Paused'} tone={autoQueueEnabled ? 'good' : 'neutral'} />
+                  </div>
+                </div>
               )}
-            </div>
             </SectionFrame>
 
             <SectionFrame
-            title="Quick Tools"
-            eyebrow="Compact utility strip"
-            actions={
-              <div className={styles.sectionActionsInline}>
-                <button className={styles.ghostButton} onClick={state.botStatus.connected ? store.stopBot : store.startBot}>
-                  {state.botStatus.connected ? 'Disconnect bot' : 'Connect bot'}
-                </button>
-                <button className={styles.ghostButton} onClick={store.openDataFolder}>
-                  Reveal data
-                </button>
-              </div>
-            }
-          >
-            <div className={styles.utilityRow}>
-              <div className={styles.compactPane}>
-                <p className={styles.eyebrow}>Test request</p>
-                <div className={styles.formRow}>
-                  <input value={store.manualUser} onChange={(event) => store.setManualUser(event.target.value)} placeholder="viewer" />
-                  <input
-                    value={store.manualQuery}
-                    onChange={(event) => store.setManualQuery(event.target.value)}
-                    placeholder="human nature michael jackson"
-                  />
-                  <button className={styles.secondaryButton} onClick={store.submitManualRequest}>
-                    Add
+              title="Queue"
+              eyebrow="Live lane"
+              actions={
+                <div className={styles.sectionActionsInline}>
+                  <button className={styles.ghostButton} onClick={store.wipeQueue}>
+                    Clear queue
+                  </button>
+                  <button className={styles.ghostButton} onClick={() => openPanel('now-playing')}>
+                    Probe
                   </button>
                 </div>
+              }
+            >
+              <div className={styles.queueHead}>
+                <span>Track</span>
+                <span>Requester</span>
+                <span>Status</span>
+                <span>Time</span>
+                <span>Actions</span>
               </div>
-              <div className={styles.compactPane}>
-                <p className={styles.eyebrow}>Resolver</p>
-                <div className={styles.formRow}>
-                  <input
-                    value={store.searchQuery}
-                    onChange={(event) => store.setSearchQuery(event.target.value)}
-                    placeholder="Search Apple Music"
-                  />
-                  <button className={styles.secondaryButton} onClick={store.runSearch}>
-                    Search
+              <div className={styles.queueBody}>
+                {queue.length ? (
+                  queue.map((item) => (
+                    <QueueRow
+                      key={item.id}
+                      item={item}
+                      active={store.selectedRequestId === item.id}
+                      onSelect={() => store.setSelectedRequestId(item.id)}
+                      onRemove={() => store.removeQueueItem(item.id)}
+                    />
+                  ))
+                ) : (
+                  <p className={styles.emptyCopy}>No requests are active right now.</p>
+                )}
+              </div>
+            </SectionFrame>
+
+            <SectionFrame
+              title="Quick Tools"
+              eyebrow="Compact utility strip"
+              actions={
+                <div className={styles.sectionActionsInline}>
+                  <button className={styles.ghostButton} onClick={state.botStatus.connected ? store.stopBot : store.startBot}>
+                    {state.botStatus.connected ? 'Disconnect bot' : 'Connect bot'}
+                  </button>
+                  <button className={styles.ghostButton} onClick={store.openDataFolder}>
+                    Reveal data
                   </button>
                 </div>
-                {(store.searchResults?.matches ?? []).length ? (
-                  <div className={styles.inlineResultList}>
-                    {(store.searchResults?.matches ?? []).slice(0, 4).map((match) => (
-                      <button
-                        key={match.id}
-                        type="button"
-                        className={styles.searchResult}
-                        onClick={() =>
-                          state.controlMode === 'streamer-safe'
-                            ? void store.approveSelectedRequest(match)
-                            : void store.handoffSelectedTrack(undefined, match.url)
-                        }
-                      >
-                        <strong>{clampText(`${match.title} - ${match.artistName}`, 48)}</strong>
-                        <span>{clampText(match.albumName || 'Apple Music result', 56)}</span>
-                      </button>
-                    ))}
+              }
+            >
+              <div className={styles.utilityRow}>
+                <div className={styles.compactPane}>
+                  <p className={styles.eyebrow}>Test request</p>
+                  <div className={styles.formRow}>
+                    <input value={store.manualUser} onChange={(event) => store.setManualUser(event.target.value)} placeholder="viewer" />
+                    <input
+                      value={store.manualQuery}
+                      onChange={(event) => store.setManualQuery(event.target.value)}
+                      placeholder="human nature michael jackson"
+                    />
+                    <button className={styles.secondaryButton} onClick={store.submitManualRequest}>
+                      Add
+                    </button>
                   </div>
-                ) : null}
+                </div>
+                <div className={styles.compactPane}>
+                  <p className={styles.eyebrow}>Resolver</p>
+                  <div className={styles.formRow}>
+                    <input
+                      value={store.searchQuery}
+                      onChange={(event) => store.setSearchQuery(event.target.value)}
+                      placeholder="Search Apple Music"
+                    />
+                    <button className={styles.secondaryButton} onClick={store.runSearch}>
+                      Search
+                    </button>
+                  </div>
+                  {(store.searchResults?.matches ?? []).length ? (
+                    <div className={styles.inlineResultList}>
+                      {(store.searchResults?.matches ?? []).slice(0, 4).map((match) => (
+                        <button
+                          key={match.id}
+                          type="button"
+                          className={styles.searchResult}
+                          onClick={() => void store.approveSelectedRequest(match)}
+                        >
+                          <strong>{clampText(`${match.title} - ${match.artistName}`, 48)}</strong>
+                          <span>{clampText(match.albumName || 'Apple Music result', 56)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </div>
-            </div>
             </SectionFrame>
           </section>
         </div>
@@ -663,7 +587,7 @@ function App() {
         <span>
           {store.busyAction
             ? `Working: ${store.busyAction}`
-            : `Auto mode: ${state.settings.automation.autoArmEnabled ? 'on' : 'hotkey'} | Storage: ${state.storage.mode}`}
+            : `Auto-queue: ${autoQueueEnabled ? 'on' : 'paused'} | Storage: ${state.storage.mode}`}
         </span>
       </footer>
 
@@ -755,63 +679,8 @@ function App() {
         </ModalShell>
       ) : null}
 
-      {modalPanel === 'automation' ? (
-        <ModalShell title="Automation Lab" eyebrow="Reliable + experimental" onClose={closeModal} actions={<button className={styles.secondaryButton} onClick={store.saveDraftSettings}>Save automation</button>}>
-          <div className={styles.formGrid}>
-            <label>
-              Control mode
-              <select value={store.settingsDraft.automation.controlMode} onChange={(event) => store.updateDraft('automation', { controlMode: event.target.value as typeof store.settingsDraft.automation.controlMode })}>
-                <option value="streamer-safe">Streamer-safe</option>
-                <option value="desktop-automation">Desktop automation</option>
-              </select>
-            </label>
-            <label>
-              Active adapter
-              <select value={store.settingsDraft.automation.adapter} onChange={(event) => store.updateDraft('automation', { adapter: event.target.value as typeof store.settingsDraft.automation.adapter })}>
-                <option value="deep-link">Deep link adapter</option>
-                <option value="ui-automation">UI automation adapter</option>
-              </select>
-            </label>
-            <label className={styles.toggleLabel}>
-              <input type="checkbox" checked={store.settingsDraft.automation.experimentalAutomationEnabled} onChange={(event) => store.updateDraft('automation', { experimentalAutomationEnabled: event.target.checked })} />
-              Enable experimental automation bridge
-            </label>
-            <label className={styles.toggleLabel}>
-              <input type="checkbox" checked={store.settingsDraft.automation.autoArmEnabled} onChange={(event) => store.updateDraft('automation', { autoArmEnabled: event.target.checked })} />
-              Automatically dispatch matched requests
-            </label>
-            <label>
-              Experimental handoff
-              <select value={store.settingsDraft.automation.handoffMode} onChange={(event) => store.updateDraft('automation', { handoffMode: event.target.value as typeof store.settingsDraft.automation.handoffMode })}>
-                <option value="play-next">Queue as Play Next</option>
-                <option value="play-now">Play immediately</option>
-              </select>
-            </label>
-            <label>
-              Dispatch hotkey
-              <input value={store.settingsDraft.automation.dispatchHotkey} onChange={(event) => store.updateDraft('automation', { dispatchHotkey: event.target.value })} onBlur={(event) => { void store.updateDispatchHotkey(event.target.value) }} placeholder="F8" />
-            </label>
-          </div>
-          <div className={styles.noteBox}>
-            <strong>Current adapter capabilities</strong>
-            <p>{store.selectedCapabilities ? `Supports ${store.selectedCapabilities.supportedActions.join(', ')}.` : 'Capabilities will appear after the backend reports them.'}</p>
-          </div>
-          <div className={styles.noteBox}>
-            <strong>{store.settingsDraft.automation.controlMode === 'streamer-safe' ? 'Streamer-safe mode' : 'Desktop automation mode'}</strong>
-            <p>{store.settingsDraft.automation.controlMode === 'streamer-safe' ? 'Use the dispatch hotkey or enable Auto when you want AppleCrap to control Apple Music.' : 'This mode may foreground Apple Music and is useful for off-stream testing only.'}</p>
-          </div>
-          <div className={styles.inlineButtons}>
-            <button className={styles.secondaryButton} onClick={() => store.executeAutomation(store.settingsDraft.automation.adapter, 'probe_capabilities')}>Probe capabilities</button>
-            <button className={styles.secondaryButton} onClick={() => store.executeAutomation(store.settingsDraft.automation.adapter, 'dry_run')}>Dry run</button>
-            <button className={styles.ghostButton} onClick={() => store.executeAutomation(store.settingsDraft.automation.adapter, 'focus_player')}>Focus player</button>
-            <button className={styles.ghostButton} onClick={() => store.executeAutomation(store.settingsDraft.automation.adapter, 'attempt_play')}>Attempt play</button>
-            <button className={styles.ghostButton} onClick={() => store.executeAutomation(store.settingsDraft.automation.adapter, 'attempt_queue_action')}>Attempt queue action</button>
-          </div>
-        </ModalShell>
-      ) : null}
-
       {modalPanel === 'now-playing' ? (
-        <ModalShell title="Now Playing" eyebrow="Probe state" onClose={closeModal} actions={<button className={styles.secondaryButton} onClick={store.rerunProbe}>Run probe now</button>}>
+        <ModalShell title="Now Playing" eyebrow="Probe state" onClose={closeModal}>
           <div className={styles.metaStrip}>
             <Pill label="Source" value={state.probe.source || 'idle'} />
             <Pill label="App" value={state.probe.appId || 'Unknown'} />
@@ -855,7 +724,7 @@ function App() {
         <ModalShell title="About AppleCrap Alpha" eyebrow="Product notes" onClose={closeModal}>
           <div className={styles.noteBox}>
             <strong>What this alpha is</strong>
-            <p>A Windows-first Twitch-to-Apple Music handoff desk with a reliable request queue, playback-aware auto-clear, and an experimental automation bridge that can fail safely.</p>
+            <p>A Windows-first Twitch-to-Apple Music request queue. Requests are matched against Apple Music, queued into the embedded player as Play Next, and confirmed once playback starts.</p>
           </div>
           <div className={styles.noteBox}>
             <strong>Portable build intent</strong>

@@ -409,6 +409,11 @@ h2 {
   gap: 4px;
 }
 
+.noticeStripWarn {
+  border-color: rgba(215, 160, 83, 0.4);
+  background: rgba(95, 64, 28, 0.24);
+}
+
 .queueHead,
 .queueRow {
   display: grid;

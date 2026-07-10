@@ -7,7 +7,6 @@ import type {
   ManualRequestPayload,
   OpenTrackPayload,
   ProbeResult,
-  RunAutomationPayload,
   SaveSettingsPayload,
   SearchResult,
 } from './types'
@@ -16,7 +15,6 @@ export const appEvents = {
   stateChanged: 'stateChanged',
   logAppended: 'logAppended',
   probeSnapshot: 'probeSnapshot',
-  automationSnapshot: 'automationSnapshot',
 } as const
 
 export async function bootstrapApp() {
@@ -59,10 +57,6 @@ export async function runProbe() {
   return invoke<ProbeResult>('run_probe')
 }
 
-export async function runAutomationStep(payload: RunAutomationPayload) {
-  return invoke<CommandResult>('run_automation_step', { payload })
-}
-
 export async function dispatchNextRequest() {
   return invoke<AppState>('dispatch_next_request')
 }
@@ -73,10 +67,6 @@ export async function approveRequest(payload: ApproveRequestPayload) {
 
 export async function sendRequestToManualReview(id: string) {
   return invoke<AppState>('send_request_to_manual_review', { id })
-}
-
-export async function setDispatchHotkey(shortcut: string) {
-  return invoke<AppState>('set_dispatch_hotkey', { shortcut })
 }
 
 export async function exportDiagnostics() {
@@ -96,7 +86,6 @@ export async function bindAppEvents(onStateChanged: (payload: AppState) => void)
     listen<AppState>(appEvents.stateChanged, (event) => onStateChanged(event.payload)),
     listen(appEvents.logAppended, () => undefined),
     listen(appEvents.probeSnapshot, () => undefined),
-    listen(appEvents.automationSnapshot, () => undefined),
   ])
 
   return () => {
