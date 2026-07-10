@@ -14,35 +14,13 @@
 
   let ipcBroken = false
 
-  // Debug badge: shows which upstream channel the bridge is using and the
-  // last error, so channel failures are visible instead of silent.
-  const debugState = { channel: 'starting', sent: 0, lastError: '' }
-  let badge = null
-  function renderBadge() {
-    if (!document.body) {
-      return
-    }
-    if (!badge) {
-      badge = document.createElement('div')
-      badge.style.cssText =
-        'position:fixed;bottom:6px;left:6px;z-index:2147483647;background:rgba(0,0,0,0.8);color:#9f9;font:11px/1.4 Consolas,monospace;padding:4px 8px;border-radius:4px;pointer-events:none;'
-      document.body.appendChild(badge)
-    }
-    badge.textContent =
-      'bridge: ' + debugState.channel + ' | sent: ' + debugState.sent +
-      (debugState.lastError ? ' | err: ' + debugState.lastError : '')
-  }
-
   function sendViaTitle(payload) {
     try {
       const json = JSON.stringify(payload)
       document.title = 'ACB1|' + btoa(unescape(encodeURIComponent(json)))
-      debugState.channel = 'title-fallback'
-      debugState.sent += 1
-    } catch (error) {
-      debugState.lastError = 'title: ' + (error && error.message ? error.message : error)
+    } catch (_) {
+      /* nothing else we can do if both channels fail */
     }
-    renderBadge()
   }
 
   function report(payload) {
@@ -53,23 +31,14 @@
         if (internals && typeof internals.invoke === 'function') {
           internals
             .invoke('player_bridge_report', { payload })
-            .then(() => {
-              debugState.channel = 'ipc'
-              debugState.sent += 1
-              renderBadge()
-            })
-            .catch((error) => {
+            .catch(() => {
               ipcBroken = true
-              debugState.lastError =
-                'ipc: ' + (error && error.message ? error.message : String(error))
               sendViaTitle(payload)
             })
           return
         }
-        debugState.lastError = 'ipc: __TAURI_INTERNALS__ missing'
-      } catch (error) {
-        debugState.lastError =
-          'ipc threw: ' + (error && error.message ? error.message : String(error))
+      } catch (_) {
+        /* fall through to the title-fallback channel */
       }
       ipcBroken = true
     }
