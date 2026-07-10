@@ -17,7 +17,6 @@ pub struct SettingsStore {
     pub state_file: PathBuf,
     pub diagnostics_dir: PathBuf,
     pub runtime_log_file: PathBuf,
-    pub scripts_dir: PathBuf,
     pub storage: StorageInfo,
 }
 
@@ -44,9 +43,7 @@ impl SettingsStore {
         };
 
         let diagnostics_dir = data_dir.join("diagnostics");
-        let scripts_dir = data_dir.join("scripts");
         fs::create_dir_all(&diagnostics_dir)?;
-        fs::create_dir_all(&scripts_dir)?;
 
         Ok(Self {
             state_file: data_dir.join("state.json"),
@@ -58,21 +55,7 @@ impl SettingsStore {
             },
             data_dir,
             diagnostics_dir,
-            scripts_dir,
         })
-    }
-
-    pub fn write_support_scripts(&self) -> Result<()> {
-        fs::create_dir_all(&self.scripts_dir)?;
-        fs::write(
-            self.scripts_dir.join("now-playing-probe.ps1"),
-            include_str!("../scripts/now-playing-probe.ps1"),
-        )?;
-        fs::write(
-            self.scripts_dir.join("apple-music-automation.ps1"),
-            include_str!("../scripts/apple-music-automation.ps1"),
-        )?;
-        Ok(())
     }
 
     pub fn load_persisted_state(&self) -> PersistedState {

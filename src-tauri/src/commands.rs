@@ -4,10 +4,7 @@ use tauri::State;
 
 use crate::{
     app::AppContext,
-    models::{
-        ApproveRequestPayload, ManualRequestPayload, OpenTrackPayload, RunAutomationPayload,
-        SaveSettingsPayload,
-    },
+    models::{ApproveRequestPayload, ManualRequestPayload, OpenTrackPayload, SaveSettingsPayload},
 };
 
 #[tauri::command]
@@ -100,14 +97,6 @@ pub async fn run_probe(
         .run_probe_once()
         .await
         .map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-pub async fn run_automation_step(
-    payload: RunAutomationPayload,
-    context: State<'_, Arc<AppContext>>,
-) -> Result<crate::models::CommandResult, String> {
-    Ok(context.run_automation(payload).await)
 }
 
 #[tauri::command]

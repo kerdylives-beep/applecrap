@@ -15,7 +15,6 @@
     "allow-search-apple-music",
     "allow-open-track",
     "allow-run-probe",
-    "allow-run-automation-step",
     "allow-dispatch-next-request",
     "allow-approve-request",
     "allow-send-request-to-manual-review",

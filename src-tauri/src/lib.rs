@@ -83,7 +83,6 @@ pub fn run() {
             search_apple_music,
             open_track,
             run_probe,
-            run_automation_step,
             dispatch_next_request,
             approve_request,
             send_request_to_manual_review,

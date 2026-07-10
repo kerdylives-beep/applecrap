@@ -96,7 +96,6 @@ fn build_summary(snapshot: &AppState) -> String {
         format!("Bot: {}", snapshot.bot_status.status),
         format!("Queue: {} item(s)", snapshot.stats.total_requests),
         format!("Probe: {}", snapshot.probe.status),
-        format!("Automation: {:?}", snapshot.automation.active_adapter),
         String::new(),
         snapshot.diagnostics.last_summary.clone(),
     ]

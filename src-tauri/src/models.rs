@@ -59,19 +59,6 @@ impl Default for BotConnectionState {
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub enum AutomationAdapterKind {
-    DeepLink,
-    UiAutomation,
-}
-
-impl Default for AutomationAdapterKind {
-    fn default() -> Self {
-        Self::DeepLink
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
 pub enum AutomationHandoffMode {
     PlayNow,
     PlayNext,
@@ -94,17 +81,6 @@ impl Default for AutomationControlMode {
     fn default() -> Self {
         Self::StreamerSafe
     }
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum AutomationAction {
-    ProbeCapabilities,
-    FocusPlayer,
-    OpenTrack,
-    AttemptQueueAction,
-    AttemptPlay,
-    DryRun,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -220,7 +196,6 @@ impl Default for AppleMusicSettings {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AutomationSettings {
-    pub adapter: AutomationAdapterKind,
     #[serde(alias = "controlMode")]
     pub control_mode: AutomationControlMode,
     pub experimental_automation_enabled: bool,
@@ -234,7 +209,6 @@ pub struct AutomationSettings {
 impl Default for AutomationSettings {
     fn default() -> Self {
         Self {
-            adapter: AutomationAdapterKind::UiAutomation,
             control_mode: AutomationControlMode::StreamerSafe,
             experimental_automation_enabled: true,
             handoff_mode: AutomationHandoffMode::PlayNext,
@@ -338,48 +312,6 @@ impl Default for ProbeSnapshot {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AutomationCapabilities {
-    pub adapter: AutomationAdapterKind,
-    pub supported_actions: Vec<AutomationAction>,
-    pub can_focus_player: bool,
-    pub can_open_track: bool,
-    pub can_queue_action: bool,
-    pub can_play: bool,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AutomationRunResult {
-    pub adapter: AutomationAdapterKind,
-    pub action: AutomationAction,
-    pub ok: bool,
-    pub summary: String,
-    pub detail: String,
-    pub timestamp: String,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AutomationSnapshot {
-    pub active_adapter: AutomationAdapterKind,
-    pub experimental_enabled: bool,
-    pub capabilities: Vec<AutomationCapabilities>,
-    pub last_run: Option<AutomationRunResult>,
-}
-
-impl Default for AutomationSnapshot {
-    fn default() -> Self {
-        Self {
-            active_adapter: AutomationAdapterKind::DeepLink,
-            experimental_enabled: false,
-            capabilities: Vec::new(),
-            last_run: None,
-        }
-    }
-}
-
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticsSnapshot {
@@ -432,7 +364,6 @@ pub struct AppState {
     pub logs: Vec<LogEntry>,
     pub bot_status: BotStatus,
     pub probe: ProbeSnapshot,
-    pub automation: AutomationSnapshot,
     pub diagnostics: DiagnosticsSnapshot,
     pub legacy_import: LegacyImportStatus,
     pub storage: StorageInfo,
@@ -470,7 +401,6 @@ pub struct AppleMusicSettingsPatch {
 #[derive(Clone, Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationSettingsPatch {
-    pub adapter: Option<AutomationAdapterKind>,
     pub control_mode: Option<AutomationControlMode>,
     pub experimental_automation_enabled: Option<bool>,
     pub handoff_mode: Option<AutomationHandoffMode>,
@@ -513,16 +443,6 @@ pub struct ProbeResult {
 pub struct CommandResult {
     pub ok: bool,
     pub message: String,
-}
-
-#[derive(Clone, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct RunAutomationPayload {
-    pub adapter: AutomationAdapterKind,
-    pub action: AutomationAction,
-    pub request_id: Option<String>,
-    pub dry_run: Option<bool>,
-    pub allow_in_streamer_safe_mode: Option<bool>,
 }
 
 #[derive(Clone, Deserialize, Debug)]
@@ -600,9 +520,6 @@ impl AppSettings {
         }
 
         if let Some(automation) = patch.automation {
-            if let Some(adapter) = automation.adapter {
-                self.automation.adapter = adapter;
-            }
             if let Some(control_mode) = automation.control_mode {
                 self.automation.control_mode = control_mode;
             }
@@ -701,9 +618,7 @@ pub fn compact_log_message(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        AutomationAdapterKind, AutomationControlMode, AutomationHandoffMode, PersistedState,
-    };
+    use super::{AutomationControlMode, AutomationHandoffMode, PersistedState};
 
     #[test]
     fn persisted_state_defaults_missing_handoff_mode() {
@@ -740,10 +655,6 @@ mod tests {
         )
         .expect("legacy-compatible state should deserialize");
 
-        assert_eq!(
-            state.settings.automation.adapter,
-            AutomationAdapterKind::UiAutomation
-        );
         assert!(state.settings.automation.experimental_automation_enabled);
         assert_eq!(
             state.settings.automation.control_mode,

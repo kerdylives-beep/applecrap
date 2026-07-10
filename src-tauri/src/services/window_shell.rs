@@ -37,24 +37,6 @@ pub fn reveal_directory(path: &Path) -> Result<()> {
         .map_err(|error| anyhow!("unable to reveal {}: {error}", path.display()))
 }
 
-pub fn launch_apple_music() -> Result<()> {
-    let mut command = Command::new("powershell.exe");
-    command.args([
-        "-NoProfile",
-        "-NonInteractive",
-        "-WindowStyle",
-        "Hidden",
-        "-Command",
-        "Start-Process",
-        "shell:AppsFolder\\AppleInc.AppleMusicWin_nzyj5cx40ttqa!App",
-    ]);
-    hide_command_window(&mut command);
-    command
-        .spawn()
-        .map(|_| ())
-        .map_err(|error| anyhow!("unable to launch Apple Music: {error}"))
-}
-
 #[cfg(windows)]
 fn hide_command_window(command: &mut Command) {
     use std::os::windows::process::CommandExt;

@@ -7,15 +7,13 @@ use tokio::sync::{mpsc, Mutex, RwLock};
 use crate::{
     models::{
         compact_log_message, AppState, AppStats, ApproveRequestPayload, AutomationControlMode,
-        AutomationRunResult, AutomationSnapshot, BotConnectionState, BotStatus, CommandResult,
-        DiagnosticsSnapshot, LegacyImportStatus, LogEntry, LogLevel, OpenTrackPayload,
-        PersistedState, ProbeResult, ProbeSnapshot, QueueHandoffState, QueueItem, ResolutionStatus,
-        RunAutomationPayload, SaveSettingsPayload, SearchResult,
+        BotConnectionState, BotStatus, CommandResult, DiagnosticsSnapshot, LegacyImportStatus,
+        LogEntry, LogLevel, OpenTrackPayload, PersistedState, ProbeResult, ProbeSnapshot,
+        QueueHandoffState, QueueItem, ResolutionStatus, SaveSettingsPayload, SearchResult,
     },
     services::{
-        apple_catalog::AppleCatalog, automation_bridge::AutomationBridge, diagnostics,
-        player_bridge::PlayerBridge, queue_engine, settings_store::SettingsStore, twitch_service,
-        window_shell,
+        apple_catalog::AppleCatalog, diagnostics, player_bridge::PlayerBridge, queue_engine,
+        settings_store::SettingsStore, twitch_service, window_shell,
     },
 };
 
@@ -24,7 +22,6 @@ pub struct AppContext {
     pub storage: SettingsStore,
     pub player_bridge: PlayerBridge,
     apple_catalog: AppleCatalog,
-    automation_bridge: AutomationBridge,
     persisted: RwLock<PersistedState>,
     runtime: RwLock<RuntimeState>,
     twitch_connection: Mutex<Option<TwitchConnection>>,
@@ -38,7 +35,6 @@ struct TwitchConnection {
 struct RuntimeState {
     bot_status: BotStatus,
     probe: ProbeSnapshot,
-    automation: AutomationSnapshot,
     diagnostics: DiagnosticsSnapshot,
     legacy_import: LegacyImportStatus,
     last_confirmed_queue_id: Option<String>,
@@ -50,7 +46,6 @@ struct RuntimeState {
 impl AppContext {
     pub fn initialize(handle: AppHandle) -> Result<Self> {
         let storage = SettingsStore::resolve()?;
-        storage.write_support_scripts()?;
         let _ = storage.append_runtime_log(&format!(
             "[INFO] {} AppleCrap Alpha starting. data_dir={}",
             crate::models::now_iso(),
@@ -59,23 +54,11 @@ impl AppContext {
         let persisted = storage.load_persisted_state();
         let _ = storage.save_persisted_state(&persisted);
         let legacy_import = storage.detect_legacy_import();
-        let automation = AutomationSnapshot {
-            active_adapter: persisted.settings.automation.adapter.clone(),
-            experimental_enabled: persisted
-                .settings
-                .automation
-                .experimental_automation_enabled,
-            capabilities: AutomationBridge::capabilities(),
-            last_run: None,
-        };
 
         Ok(Self {
             handle,
             player_bridge: PlayerBridge::new(),
             apple_catalog: AppleCatalog::new(),
-            automation_bridge: AutomationBridge::new(
-                storage.scripts_dir.join("apple-music-automation.ps1"),
-            ),
             storage,
             persisted: RwLock::new(persisted),
             runtime: RwLock::new(RuntimeState {
@@ -86,7 +69,6 @@ impl AppContext {
                     ..Default::default()
                 },
                 legacy_import,
-                automation,
                 last_confirmed_queue_id: None,
                 last_session_signature: String::new(),
                 last_probe_error: String::new(),
@@ -151,7 +133,6 @@ impl AppContext {
             logs: persisted.logs.iter().take(80).cloned().collect(),
             bot_status: runtime.bot_status.clone(),
             probe: runtime.probe.clone(),
-            automation: runtime.automation.clone(),
             diagnostics: runtime.diagnostics.clone(),
             legacy_import: runtime.legacy_import.clone(),
             storage: self.storage.storage.clone(),
@@ -227,14 +208,6 @@ impl AppContext {
         {
             let mut persisted = self.persisted.write().await;
             persisted.settings = next_settings;
-        }
-
-        {
-            let settings = self.persisted.read().await.settings.clone();
-            let mut runtime = self.runtime.write().await;
-            runtime.automation.active_adapter = settings.automation.adapter.clone();
-            runtime.automation.experimental_enabled =
-                settings.automation.experimental_automation_enabled;
         }
 
         self.save_persisted().await?;
@@ -460,44 +433,6 @@ impl AppContext {
         Ok(ProbeResult { snapshot })
     }
 
-    pub async fn run_automation(&self, payload: RunAutomationPayload) -> CommandResult {
-        let settings = self.current_settings().await;
-        if settings.automation.control_mode == AutomationControlMode::StreamerSafe
-            && !payload.allow_in_streamer_safe_mode.unwrap_or(false)
-        {
-            return CommandResult::error(
-                "Streamer-safe mode blocks Apple Music automation. Use Automation Lab or switch to desktop automation.",
-            );
-        }
-
-        let request = self.find_request(payload.request_id.as_deref()).await;
-        let result = self
-            .automation_bridge
-            .run(&payload, &settings, request.as_ref())
-            .await;
-
-        self.record_automation_result(result.clone()).await;
-        self.add_log(
-            if result.ok {
-                LogLevel::Info
-            } else {
-                LogLevel::Warn
-            },
-            format!(
-                "Automation {:?} via {:?}: {} ({})",
-                result.action, result.adapter, result.summary, result.detail
-            ),
-        )
-        .await;
-        self.sync_request_handoff_from_automation(&payload, &result)
-            .await;
-        if result.ok {
-            CommandResult::ok(result.summary)
-        } else {
-            CommandResult::error(result.detail)
-        }
-    }
-
     pub async fn export_diagnostics(&self) -> CommandResult {
         match diagnostics::export_bundle(&self.storage.diagnostics_dir, &self.snapshot().await) {
             Ok(path) => {
@@ -526,11 +461,6 @@ impl AppContext {
     pub async fn import_legacy_state(self: &Arc<Self>) -> CommandResult {
         match self.storage.import_legacy_state() {
             Ok(Some(legacy_state)) => {
-                let adapter = legacy_state.settings.automation.adapter.clone();
-                let experimental_enabled = legacy_state
-                    .settings
-                    .automation
-                    .experimental_automation_enabled;
                 {
                     let mut persisted = self.persisted.write().await;
                     *persisted = legacy_state;
@@ -540,8 +470,6 @@ impl AppContext {
                     runtime.legacy_import.available = false;
                     runtime.legacy_import.imported = true;
                     runtime.legacy_import.message = "Legacy Electron state imported.".to_string();
-                    runtime.automation.active_adapter = adapter;
-                    runtime.automation.experimental_enabled = experimental_enabled;
                 }
                 let _ = self.save_persisted().await;
                 self.emit_state().await;
@@ -716,48 +644,6 @@ impl AppContext {
         if let Some(error) = should_log_error {
             self.add_log(LogLevel::Warn, format!("Now Playing unavailable: {error}"))
                 .await;
-        }
-    }
-
-    async fn record_automation_result(&self, result: AutomationRunResult) {
-        {
-            let mut runtime = self.runtime.write().await;
-            runtime.automation.last_run = Some(result.clone());
-            runtime.automation.active_adapter = result.adapter.clone();
-        }
-        let _ = self.handle.emit("automationSnapshot", result);
-        self.emit_state().await;
-    }
-
-    async fn sync_request_handoff_from_automation(
-        &self,
-        payload: &RunAutomationPayload,
-        result: &AutomationRunResult,
-    ) {
-        let Some(request_id) = payload.request_id.as_deref() else {
-            return;
-        };
-
-        match payload.action {
-            crate::models::AutomationAction::AttemptQueueAction
-            | crate::models::AutomationAction::AttemptPlay => {
-                let state = if result.ok {
-                    QueueHandoffState::SentToPlayer
-                } else {
-                    QueueHandoffState::FailedDispatch
-                };
-                self.update_request_handoff(
-                    request_id,
-                    state,
-                    Some(if result.ok {
-                        result.summary.clone()
-                    } else {
-                        result.detail.clone()
-                    }),
-                )
-                .await;
-            }
-            _ => {}
         }
     }
 
