@@ -136,6 +136,12 @@ export type AppStats = {
   connectedSince: string | null
 }
 
+export type UpdateInfo = {
+  version: string
+  releaseUrl: string
+  assetUrl: string
+}
+
 export type AppState = {
   settings: AppSettings
   queue: QueueItem[]
@@ -147,6 +153,7 @@ export type AppState = {
   legacyImport: LegacyImportStatus
   storage: StorageInfo
   stats: AppStats
+  update?: UpdateInfo | null
 }
 
 export type ManualRequestPayload = {

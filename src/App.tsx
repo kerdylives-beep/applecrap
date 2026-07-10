@@ -357,8 +357,22 @@ function App() {
         </div>
 
         <div className={styles.contentViewport}>
-          {degradedNotices.length ? (
+          {state.update || degradedNotices.length ? (
             <div className={styles.bannerStrip}>
+              {state.update ? (
+                <div className={styles.bannerCard}>
+                  <span>
+                    Update {state.update.version} is available. Installing keeps your settings and queue.
+                  </span>
+                  <button
+                    className={styles.menuTextButton}
+                    disabled={store.busyAction === 'install-update'}
+                    onClick={store.installUpdate}
+                  >
+                    {store.busyAction === 'install-update' ? 'Installing…' : 'Install & restart'}
+                  </button>
+                </div>
+              ) : null}
               {degradedNotices.map((message) => (
                 <div key={message} className={styles.bannerCard}>
                   <span>{message}</span>

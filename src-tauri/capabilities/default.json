@@ -25,6 +25,8 @@
     "allow-window-toggle-maximize",
     "allow-window-close",
     "allow-window-start-drag",
+    "allow-check-for-updates",
+    "allow-install-update",
     "allow-player-show",
     "allow-player-hide"
   ]

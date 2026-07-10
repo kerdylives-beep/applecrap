@@ -81,6 +81,10 @@ export async function importLegacyState() {
   return invoke<CommandResult>('import_legacy_state')
 }
 
+export async function installUpdate() {
+  return invoke<CommandResult>('install_update')
+}
+
 export async function bindAppEvents(onStateChanged: (payload: AppState) => void) {
   const unlisteners = await Promise.all([
     listen<AppState>(appEvents.stateChanged, (event) => onStateChanged(event.payload)),

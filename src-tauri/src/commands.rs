@@ -153,6 +153,23 @@ pub async fn import_legacy_state(
 }
 
 #[tauri::command]
+pub async fn check_for_updates(
+    context: State<'_, Arc<AppContext>>,
+) -> Result<crate::models::AppState, String> {
+    context
+        .check_for_updates()
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn install_update(
+    context: State<'_, Arc<AppContext>>,
+) -> Result<crate::models::CommandResult, String> {
+    Ok(context.install_update().await)
+}
+
+#[tauri::command]
 pub async fn player_bridge_report(
     payload: serde_json::Value,
     context: State<'_, Arc<AppContext>>,

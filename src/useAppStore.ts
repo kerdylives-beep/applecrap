@@ -10,6 +10,7 @@ import {
   enqueueManualRequest,
   exportDiagnostics,
   importLegacyState,
+  installUpdate as installUpdateCommand,
   removeRequest,
   revealDataFolder,
   saveSettings,
@@ -354,6 +355,13 @@ export function useAppStore() {
     }
   }
 
+  const installUpdate = async () => {
+    const result = await runAction('install-update', installUpdateCommand)
+    if (result) {
+      applyResultNotice(result)
+    }
+  }
+
   const dispatchFeaturedRequest = async () => {
     const nextState = await runAction('dispatch-next', dispatchNextRequest)
     if (nextState) {
@@ -424,5 +432,6 @@ export function useAppStore() {
     exportLogsAndState,
     openDataFolder,
     importLegacy,
+    installUpdate,
   }
 }

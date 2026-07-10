@@ -189,6 +189,12 @@
           "markdownDescription": "Enables the bootstrap_app command without any pre-configured scope."
         },
         {
+          "description": "Enables the check_for_updates command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-check-for-updates",
+          "markdownDescription": "Enables the check_for_updates command without any pre-configured scope."
+        },
+        {
           "description": "Enables the clear_queue command without any pre-configured scope.",
           "type": "string",
           "const": "allow-clear-queue",
@@ -229,6 +235,12 @@
           "type": "string",
           "const": "allow-import-legacy-state",
           "markdownDescription": "Enables the import_legacy_state command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the install_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-install-update",
+          "markdownDescription": "Enables the install_update command without any pre-configured scope."
         },
         {
           "description": "Enables the open_track command without any pre-configured scope.",
@@ -327,6 +339,12 @@
           "markdownDescription": "Denies the bootstrap_app command without any pre-configured scope."
         },
         {
+          "description": "Denies the check_for_updates command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-check-for-updates",
+          "markdownDescription": "Denies the check_for_updates command without any pre-configured scope."
+        },
+        {
           "description": "Denies the clear_queue command without any pre-configured scope.",
           "type": "string",
           "const": "deny-clear-queue",
@@ -367,6 +385,12 @@
           "type": "string",
           "const": "deny-import-legacy-state",
           "markdownDescription": "Denies the import_legacy_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the install_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-install-update",
+          "markdownDescription": "Denies the install_update command without any pre-configured scope."
         },
         {
           "description": "Denies the open_track command without any pre-configured scope.",

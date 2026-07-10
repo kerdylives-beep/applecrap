@@ -13,6 +13,7 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            services::updater::clean_stale_artifacts();
             let context = Arc::new(AppContext::initialize(app.handle().clone())?);
             context.start_background_services();
             app.manage(context);
@@ -67,7 +68,9 @@ pub fn run() {
             window_start_drag,
             player_bridge_report,
             player_show,
-            player_hide
+            player_hide,
+            check_for_updates,
+            install_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running AppleCrap Alpha");

@@ -28,6 +28,8 @@ fn main() {
             "player_bridge_report",
             "player_show",
             "player_hide",
+            "check_for_updates",
+            "install_update",
         ]),
     ))
     .expect("failed to run tauri-build");

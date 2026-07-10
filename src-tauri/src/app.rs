@@ -13,7 +13,7 @@ use crate::{
     },
     services::{
         apple_catalog::AppleCatalog, diagnostics, player_bridge::PlayerBridge, queue_engine,
-        settings_store::SettingsStore, twitch_service, window_shell,
+        settings_store::SettingsStore, twitch_service, updater, window_shell,
     },
 };
 
@@ -41,6 +41,7 @@ struct RuntimeState {
     last_session_signature: String,
     last_probe_error: String,
     auto_handoff_in_flight: bool,
+    update: Option<crate::models::UpdateInfo>,
 }
 
 impl AppContext {
@@ -73,6 +74,7 @@ impl AppContext {
                 last_session_signature: String::new(),
                 last_probe_error: String::new(),
                 auto_handoff_in_flight: false,
+                update: None,
             }),
             twitch_connection: Mutex::new(None),
         })
@@ -102,6 +104,95 @@ impl AppContext {
                 }
             }
         });
+
+        let update_context = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            let _ = update_context.check_for_updates().await;
+        });
+    }
+
+    pub async fn check_for_updates(self: &Arc<Self>) -> Result<AppState> {
+        let current_version = self.handle.package_info().version.to_string();
+        let client = reqwest::Client::new();
+
+        match updater::check_latest(&client, &current_version).await {
+            Ok(Some(update)) => {
+                self.add_log(
+                    LogLevel::Info,
+                    format!(
+                        "Update {} is available (running {current_version}).",
+                        update.version
+                    ),
+                )
+                .await;
+                let mut runtime = self.runtime.write().await;
+                runtime.update = Some(update);
+            }
+            Ok(None) => {
+                let mut runtime = self.runtime.write().await;
+                runtime.update = None;
+            }
+            Err(error) => {
+                self.add_log(LogLevel::Warn, format!("Update check failed: {error}"))
+                    .await;
+            }
+        }
+
+        self.emit_state().await;
+        Ok(self.snapshot().await)
+    }
+
+    pub async fn install_update(self: &Arc<Self>) -> CommandResult {
+        let Some(update) = self.runtime.read().await.update.clone() else {
+            return CommandResult::error("No update is available to install.");
+        };
+
+        self.add_log(
+            LogLevel::Info,
+            format!("Downloading update {}...", update.version),
+        )
+        .await;
+
+        let client = reqwest::Client::new();
+        let staged = match updater::download_and_stage(&client, &update.asset_url).await
+        {
+            Ok(staged) => staged,
+            Err(error) => {
+                self.add_log(LogLevel::Error, format!("Update download failed: {error}"))
+                    .await;
+                return CommandResult::error(format!(
+                    "Update failed: {error}. You can download it manually from {}.",
+                    update.release_url
+                ));
+            }
+        };
+
+        self.add_log(
+            LogLevel::Info,
+            format!(
+                "Update {} downloaded. Restarting into the new version. Settings and queue are kept.",
+                update.version
+            ),
+        )
+        .await;
+
+        if let Err(error) = updater::swap_and_launch(&staged) {
+            self.add_log(LogLevel::Error, format!("Update install failed: {error}"))
+                .await;
+            return CommandResult::error(format!(
+                "Update failed: {error}. You can download it manually from {}.",
+                update.release_url
+            ));
+        }
+
+        let handle = self.handle.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            handle.exit(0);
+        });
+
+        CommandResult::ok("Update installed. Restarting...")
     }
 
     pub async fn snapshot(&self) -> AppState {
@@ -135,6 +226,7 @@ impl AppContext {
             diagnostics: runtime.diagnostics.clone(),
             legacy_import: runtime.legacy_import.clone(),
             storage: self.storage.storage.clone(),
+            update: runtime.update.clone(),
             stats: AppStats {
                 total_requests: persisted.queue.len(),
                 unresolved_requests: persisted

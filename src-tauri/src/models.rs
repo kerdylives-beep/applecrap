@@ -328,6 +328,15 @@ pub struct AppState {
     pub legacy_import: LegacyImportStatus,
     pub storage: StorageInfo,
     pub stats: AppStats,
+    pub update: Option<UpdateInfo>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateInfo {
+    pub version: String,
+    pub release_url: String,
+    pub asset_url: String,
 }
 
 #[derive(Clone, Deserialize, Debug, Default)]
