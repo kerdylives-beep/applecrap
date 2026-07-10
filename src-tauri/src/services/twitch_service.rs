@@ -10,7 +10,8 @@ use tokio_native_tls::{native_tls, TlsConnector};
 
 use crate::{
     app::AppContext,
-    models::{normalize_twitch_oauth_token, AppSettings, BotConnectionState, LogLevel},
+    models::{normalize_twitch_oauth_token, AppSettings, BotConnectionState, LogLevel, ProbeSnapshot},
+    services::queue_engine,
 };
 
 pub async fn connect(context: Arc<AppContext>) -> Result<()> {
@@ -44,7 +45,7 @@ pub async fn connect(context: Arc<AppContext>) -> Result<()> {
         .add_log(
             LogLevel::Info,
             format!(
-                "Connecting Twitch bot as @{} to #{} (listening for {} and !remove).",
+                "Connecting Twitch bot as @{} to #{} (listening for {}, !remove, !song, !queue, and !skip).",
                 username, channel, request_command
             ),
         )
@@ -185,7 +186,7 @@ async fn handle_irc_line(
             .add_log(
                 LogLevel::Info,
                 format!(
-                    "Twitch bot connected to #{} and is listening for {} / !remove.",
+                    "Twitch bot connected to #{} and is listening for {} / !remove / !song / !queue / !skip.",
                     configured_channel, request_command
                 ),
             )
@@ -216,6 +217,46 @@ async fn handle_irc_line(
     let mut parts = normalized_message.split_whitespace();
     let command = parts.next().unwrap_or_default().to_lowercase();
     let args = parts.collect::<Vec<_>>().join(" ");
+    let normalized_request_command = request_command.trim().to_lowercase();
+
+    // The configured request command always wins, even if a streamer points
+    // it at one of the built-in command names below (e.g. sets !song as
+    // their request command) — check it first so it never gets shadowed.
+    if !normalized_request_command.is_empty() && command == normalized_request_command {
+        let is_privileged = message.is_mod_or_broadcaster
+            && context
+                .current_settings()
+                .await
+                .request_limits
+                .mods_bypass_limits;
+        let result = context
+            .process_request(&message.display_name, &args, is_privileged, "twitch")
+            .await;
+        context
+            .add_log(
+                if result.ok {
+                    LogLevel::Info
+                } else {
+                    LogLevel::Warn
+                },
+                format!(
+                    "Twitch request from @{}: {} ({})",
+                    message.display_name,
+                    if args.trim().is_empty() {
+                        "<empty request>"
+                    } else {
+                        args.trim()
+                    },
+                    result.message
+                ),
+            )
+            .await;
+        let _ = writer_tx.send(format!(
+            "PRIVMSG #{} :@{} {}\r\n",
+            message.channel, message.login, result.message
+        ));
+        return Ok(());
+    }
 
     if command == "!remove" {
         let result = context
@@ -241,55 +282,111 @@ async fn handle_irc_line(
         return Ok(());
     }
 
-    if command != request_command.to_lowercase() {
-        if command.starts_with('!') {
-            context
-                .add_log(
-                    LogLevel::Debug,
-                    format!(
-                        "Ignored Twitch command {} from @{}. Live request command is {}.",
-                        command, message.display_name, request_command
-                    ),
-                )
-                .await;
-        }
+    if command == "!song" {
+        let probe = context.current_probe().await;
+        let reply = format_song_reply(&probe);
+        context
+            .add_log(
+                LogLevel::Info,
+                format!("Twitch !song from @{}: {}", message.display_name, reply),
+            )
+            .await;
+        let _ = writer_tx.send(format!(
+            "PRIVMSG #{} :@{} {}\r\n",
+            message.channel, message.login, reply
+        ));
         return Ok(());
     }
 
-    let is_privileged = message.is_mod_or_broadcaster
-        && context
-            .current_settings()
+    if command == "!queue" {
+        let queue = context.current_queue().await;
+        let reply = queue_engine::format_queue_reply(&queue, &message.display_name);
+        context
+            .add_log(
+                LogLevel::Info,
+                format!("Twitch !queue from @{}: {}", message.display_name, reply),
+            )
+            .await;
+        let _ = writer_tx.send(format!(
+            "PRIVMSG #{} :@{} {}\r\n",
+            message.channel, message.login, reply
+        ));
+        return Ok(());
+    }
+
+    if command == "!skip" {
+        if !message.is_mod_or_broadcaster {
+            let reply = "Only mods can skip.";
+            context
+                .add_log(
+                    LogLevel::Warn,
+                    format!(
+                        "Twitch !skip denied for @{} (not a mod/broadcaster).",
+                        message.display_name
+                    ),
+                )
+                .await;
+            let _ = writer_tx.send(format!(
+                "PRIVMSG #{} :@{} {}\r\n",
+                message.channel, message.login, reply
+            ));
+            return Ok(());
+        }
+
+        let (ok, reply) = match context
+            .player_bridge
+            .run_command(&context.handle, "skip", None)
             .await
-            .request_limits
-            .mods_bypass_limits;
-    let result = context
-        .process_request(&message.display_name, &args, is_privileged, "twitch")
-        .await;
-    context
-        .add_log(
-            if result.ok {
-                LogLevel::Info
-            } else {
-                LogLevel::Warn
-            },
-            format!(
-                "Twitch request from @{}: {} ({})",
-                message.display_name,
-                if args.trim().is_empty() {
-                    "<empty request>"
-                } else {
-                    args.trim()
-                },
-                result.message
-            ),
-        )
-        .await;
-    let _ = writer_tx.send(format!(
-        "PRIVMSG #{} :@{} {}\r\n",
-        message.channel, message.login, result.message
-    ));
+        {
+            Ok(_) => (true, "Skipped.".to_string()),
+            Err(error) => (false, error.to_string()),
+        };
+        context
+            .add_log(
+                if ok { LogLevel::Info } else { LogLevel::Warn },
+                format!("Twitch !skip from @{}: {}", message.display_name, reply),
+            )
+            .await;
+        let _ = writer_tx.send(format!(
+            "PRIVMSG #{} :@{} {}\r\n",
+            message.channel, message.login, reply
+        ));
+        return Ok(());
+    }
+
+    if command.starts_with('!') {
+        context
+            .add_log(
+                LogLevel::Debug,
+                format!(
+                    "Ignored Twitch command {} from @{}. Live request command is {}.",
+                    command, message.display_name, request_command
+                ),
+            )
+            .await;
+    }
 
     Ok(())
+}
+
+/// Formats the reply for the `!song` chat command from the embedded
+/// player's probe snapshot. Pure and side-effect free so it can be unit
+/// tested without an `AppContext`.
+fn format_song_reply(probe: &ProbeSnapshot) -> String {
+    let title = probe.title.trim();
+    let is_playing_or_paused =
+        probe.status.eq_ignore_ascii_case("playing") || probe.status.eq_ignore_ascii_case("paused");
+
+    if title.is_empty() || !is_playing_or_paused {
+        return "Nothing is playing right now.".to_string();
+    }
+
+    let artist = probe.artist.trim();
+    if artist.is_empty() {
+        format!("Now playing: {title}")
+    } else {
+        format!("Now playing: {title} — {artist}")
+    }
 }
 
 async fn send_raw<W>(writer: &mut W, line: &str) -> Result<()>
@@ -365,4 +462,87 @@ fn parse_tags(input: &str) -> HashMap<String, String> {
         .filter_map(|entry| entry.split_once('='))
         .map(|(key, value)| (key.to_string(), value.to_string()))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_song_reply_reports_playing_track_with_artist() {
+        let probe = ProbeSnapshot {
+            status: "Playing".to_string(),
+            title: "Human Nature".to_string(),
+            artist: "Michael Jackson".to_string(),
+            ..ProbeSnapshot::default()
+        };
+        assert_eq!(
+            format_song_reply(&probe),
+            "Now playing: Human Nature — Michael Jackson"
+        );
+    }
+
+    #[test]
+    fn format_song_reply_accepts_paused_status() {
+        let probe = ProbeSnapshot {
+            status: "Paused".to_string(),
+            title: "Freefall".to_string(),
+            artist: "Durand Bernarr".to_string(),
+            ..ProbeSnapshot::default()
+        };
+        assert_eq!(
+            format_song_reply(&probe),
+            "Now playing: Freefall — Durand Bernarr"
+        );
+    }
+
+    #[test]
+    fn format_song_reply_omits_artist_when_missing() {
+        let probe = ProbeSnapshot {
+            status: "Playing".to_string(),
+            title: "Human Nature".to_string(),
+            artist: String::new(),
+            ..ProbeSnapshot::default()
+        };
+        assert_eq!(format_song_reply(&probe), "Now playing: Human Nature");
+    }
+
+    #[test]
+    fn format_song_reply_reports_nothing_playing_when_stopped() {
+        let probe = ProbeSnapshot {
+            status: "Stopped".to_string(),
+            title: "Human Nature".to_string(),
+            artist: "Michael Jackson".to_string(),
+            ..ProbeSnapshot::default()
+        };
+        assert_eq!(format_song_reply(&probe), "Nothing is playing right now.");
+    }
+
+    #[test]
+    fn format_song_reply_reports_nothing_playing_when_no_title() {
+        let probe = ProbeSnapshot {
+            status: "Playing".to_string(),
+            title: String::new(),
+            artist: String::new(),
+            ..ProbeSnapshot::default()
+        };
+        assert_eq!(format_song_reply(&probe), "Nothing is playing right now.");
+    }
+
+    #[test]
+    fn parses_privmsg_with_mod_badge() {
+        let line = "@badges=broadcaster/1;display-name=Streamer;mod=0 :streamer!streamer@streamer.tmi.twitch.tv PRIVMSG #streamer :!skip";
+        let parsed = parse_privmsg(line).expect("should parse");
+        assert_eq!(parsed.display_name, "Streamer");
+        assert_eq!(parsed.message, "!skip");
+        assert!(parsed.is_mod_or_broadcaster);
+    }
+
+    #[test]
+    fn parses_privmsg_without_mod_or_broadcaster() {
+        let line = "@badges=subscriber/12;display-name=Viewer;mod=0 :viewer!viewer@viewer.tmi.twitch.tv PRIVMSG #streamer :!queue";
+        let parsed = parse_privmsg(line).expect("should parse");
+        assert_eq!(parsed.display_name, "Viewer");
+        assert!(!parsed.is_mod_or_broadcaster);
+    }
 }

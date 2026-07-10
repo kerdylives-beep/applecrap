@@ -33,12 +33,20 @@ Disconnected (derived from the probe snapshot), the current now-playing
 line, and a "Show player" button that becomes "Open player to sign in"
 with a warn tone when sign-in is required.
 
-## 4. Chat commands (cheap wins) — NOT DONE (still open)
+## 4. Chat commands (cheap wins) — DONE
 
-- `!song` — reply with the probe's current title/artist.
-- `!queue` — reply with requester's position and the next few titles.
-- `!skip` (mods/broadcaster only) — `player_bridge.run_command(handle, "skip", None)`.
-All wiring would live in `twitch_service.rs::handle_irc_line`.
+- `!song` — replies with the probe's current title/artist (`format_song_reply`
+  in `twitch_service.rs`), sourced from a new read-only `AppContext::current_probe()`
+  accessor.
+- `!queue` — replies with the requester's position(s) and a preview of the
+  next few titles (`queue_engine::format_queue_reply`, unit tested), sourced
+  from a new read-only `AppContext::current_queue()` accessor.
+- `!skip` (mods/broadcaster only) — calls
+  `player_bridge.run_command(&context.handle, "skip", None)`; non-mods get
+  "Only mods can skip."
+All wiring lives in `twitch_service.rs::handle_irc_line`. The configured
+request command is checked first so it can never be shadowed by these
+built-in names (e.g. setting `!song` as the request command still requests).
 
 ## 5. Remove the debug badge — DONE
 

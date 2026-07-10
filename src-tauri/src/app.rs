@@ -289,6 +289,19 @@ impl AppContext {
         self.persisted.read().await.settings.clone()
     }
 
+    /// Read-only snapshot of the latest Now Playing probe, used by the
+    /// `!song` chat command. Kept separate from `snapshot()` so callers that
+    /// only need the probe do not pay for cloning the queue/logs/settings.
+    pub async fn current_probe(&self) -> ProbeSnapshot {
+        self.runtime.read().await.probe.clone()
+    }
+
+    /// Read-only snapshot of the persisted queue, used by the `!queue` chat
+    /// command.
+    pub async fn current_queue(&self) -> Vec<QueueItem> {
+        self.persisted.read().await.queue.clone()
+    }
+
     pub async fn save_settings(self: &Arc<Self>, payload: SaveSettingsPayload) -> Result<AppState> {
         let next_settings = {
             let persisted = self.persisted.read().await;

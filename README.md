@@ -90,6 +90,24 @@ Remove your latest request:
 !remove
 ```
 
+Check what's currently playing:
+
+```text
+!song
+```
+
+Check your position in the queue and a preview of what's up next:
+
+```text
+!queue
+```
+
+Skip the current track (mods/broadcaster only):
+
+```text
+!skip
+```
+
 ## Safety Notes
 
 - 🔐 Your Twitch token is stored locally in the app data file.

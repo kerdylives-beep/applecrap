@@ -190,6 +190,87 @@ pub fn estimate_match_confidence(query: &str, title: &str, artist: &str) -> f32 
     ((title_overlap * 0.65) + (artist_overlap * 0.35) + exact_bonus).min(1.0)
 }
 
+/// Twitch messages are capped at 500 characters; keep `!queue` replies well
+/// under that so the `@user` prefix Twitch adds never pushes us over.
+const QUEUE_REPLY_MAX_LEN: usize = 400;
+/// How many upcoming titles to preview in the `!queue` reply.
+const QUEUE_PREVIEW_COUNT: usize = 3;
+
+/// Formats the reply for the `!queue` chat command: the requester's
+/// position(s) (matched case-insensitively against `requested_by`, same as
+/// `remove_latest_request_by_user`) plus a short preview of the next few
+/// titles. Pure and side-effect free so it can be unit tested without an
+/// `AppContext`.
+pub fn format_queue_reply(queue: &[QueueItem], requested_by: &str) -> String {
+    if queue.is_empty() {
+        return "The request queue is empty.".to_string();
+    }
+
+    let normalized_name = requested_by.to_lowercase();
+    let positions: Vec<usize> = queue
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| item.requested_by.to_lowercase() == normalized_name)
+        .map(|(index, _)| index + 1)
+        .collect();
+    let total = queue.len();
+
+    let prefix = if positions.is_empty() {
+        format!(
+            "The queue has {total} request{}.",
+            if total == 1 { "" } else { "s" }
+        )
+    } else {
+        let position_labels = positions
+            .iter()
+            .map(|position| format!("#{position}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("You're {position_labels} of {total} in the queue.")
+    };
+
+    let titles: Vec<&str> = queue
+        .iter()
+        .take(QUEUE_PREVIEW_COUNT)
+        .map(queue_preview_title)
+        .collect();
+
+    // Prefer dropping preview titles over hard-truncating mid-sentence; only
+    // fall back to a hard character cutoff if even the bare prefix (e.g. a
+    // requester with many positions) is too long.
+    for preview_count in (0..=titles.len()).rev() {
+        let reply = build_queue_reply(&prefix, &titles[..preview_count]);
+        if reply.chars().count() <= QUEUE_REPLY_MAX_LEN {
+            return reply;
+        }
+    }
+
+    truncate_chars(&prefix, QUEUE_REPLY_MAX_LEN)
+}
+
+fn queue_preview_title(item: &QueueItem) -> &str {
+    item.track
+        .as_ref()
+        .map(|track| track.title.as_str())
+        .filter(|title| !title.trim().is_empty())
+        .unwrap_or_else(|| item.query.as_str())
+}
+
+fn build_queue_reply(prefix: &str, titles: &[&str]) -> String {
+    if titles.is_empty() {
+        return prefix.to_string();
+    }
+    format!("{prefix} Up next: {}.", titles.join(", "))
+}
+
+fn truncate_chars(value: &str, max_len: usize) -> String {
+    if value.chars().count() <= max_len {
+        return value.to_string();
+    }
+    let truncated: String = value.chars().take(max_len.saturating_sub(1)).collect();
+    format!("{truncated}…")
+}
+
 pub fn remove_latest_request_by_user(
     queue: &mut Vec<QueueItem>,
     requested_by: &str,
@@ -261,5 +342,105 @@ mod tests {
     fn computes_token_overlap() {
         let overlap = token_overlap("human nature", "human nature michael jackson");
         assert!(overlap > 0.9);
+    }
+
+    fn queue_item(requested_by: &str, query: &str, title: Option<&str>) -> QueueItem {
+        QueueItem {
+            requested_by: requested_by.to_string(),
+            query: query.to_string(),
+            track: title.map(|title| TrackMatch {
+                title: title.to_string(),
+                artist_name: "Some Artist".to_string(),
+                ..TrackMatch::default()
+            }),
+            ..QueueItem::default()
+        }
+    }
+
+    #[test]
+    fn format_queue_reply_reports_empty_queue() {
+        assert_eq!(format_queue_reply(&[], "viewer"), "The request queue is empty.");
+    }
+
+    #[test]
+    fn format_queue_reply_reports_position_and_preview_for_requester() {
+        let queue = vec![
+            queue_item("Alice", "song a", Some("Song A")),
+            queue_item("Bob", "song b", Some("Song B")),
+            queue_item("Carol", "song c", Some("Song C")),
+            queue_item("Dave", "song d", Some("Song D")),
+            queue_item("Erin", "song e", Some("Song E")),
+        ];
+
+        let reply = format_queue_reply(&queue, "Bob");
+        assert_eq!(
+            reply,
+            "You're #2 of 5 in the queue. Up next: Song A, Song B, Song C."
+        );
+    }
+
+    #[test]
+    fn format_queue_reply_matches_requested_by_case_insensitively() {
+        let queue = vec![queue_item("ViewerOne", "song a", Some("Song A"))];
+        let reply = format_queue_reply(&queue, "viewerone");
+        assert!(reply.starts_with("You're #1 of 1 in the queue."));
+    }
+
+    #[test]
+    fn format_queue_reply_reports_multiple_positions_for_repeat_requester() {
+        let queue = vec![
+            queue_item("Bob", "song a", Some("Song A")),
+            queue_item("Alice", "song b", Some("Song B")),
+            queue_item("Bob", "song c", Some("Song C")),
+        ];
+
+        let reply = format_queue_reply(&queue, "bob");
+        assert!(reply.starts_with("You're #1, #3 of 3 in the queue."));
+    }
+
+    #[test]
+    fn format_queue_reply_falls_back_to_totals_when_requester_has_no_requests() {
+        let queue = vec![
+            queue_item("Alice", "song a", Some("Song A")),
+            queue_item("Bob", "song b", Some("Song B")),
+        ];
+
+        let reply = format_queue_reply(&queue, "carol");
+        assert_eq!(reply, "The queue has 2 requests. Up next: Song A, Song B.");
+    }
+
+    #[test]
+    fn format_queue_reply_uses_raw_query_when_unmatched() {
+        let queue = vec![queue_item("Alice", "some unmatched query", None)];
+        let reply = format_queue_reply(&queue, "carol");
+        assert_eq!(
+            reply,
+            "The queue has 1 request. Up next: some unmatched query."
+        );
+    }
+
+    #[test]
+    fn format_queue_reply_stays_under_twitch_length_budget() {
+        // A requester with many positions makes the "You're #1, #2, ..."
+        // prefix alone exceed the reply budget; the function should hard
+        // truncate rather than return an oversized message.
+        let queue = (0..200)
+            .map(|index| queue_item("chatty_viewer", &format!("song {index}"), None))
+            .collect::<Vec<_>>();
+
+        let reply = format_queue_reply(&queue, "chatty_viewer");
+        assert!(reply.chars().count() <= 400);
+        assert!(reply.ends_with('…'));
+    }
+
+    #[test]
+    fn format_queue_reply_drops_preview_when_titles_are_too_long() {
+        let long_title = "x".repeat(450);
+        let queue = vec![queue_item("Alice", "song a", Some(&long_title))];
+
+        let reply = format_queue_reply(&queue, "someone_else");
+        // The preview would blow the length budget, so it should be dropped
+        // entirely rather than truncated mid-title.
+        assert_eq!(reply, "The queue has 1 request.");
     }
 }
