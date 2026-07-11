@@ -33,6 +33,9 @@ pub struct BridgeStatus {
     pub catalog_id: Option<String>,
     pub item_id: Option<String>,
     pub duration_ms: Option<i64>,
+    pub output_devices: Vec<crate::models::AudioOutputDevice>,
+    pub current_sink: String,
+    pub sink_error: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -209,6 +212,8 @@ impl PlayerBridge {
                 status: "Loading".to_string(),
                 explanation: "The player is loading MusicKit. Give it a moment.".to_string(),
                 updated_at: Some(crate::models::now_iso()),
+                output_devices: status.output_devices.clone(),
+                current_output: status.current_sink.clone(),
                 ..ProbeSnapshot::default()
             };
             return (snapshot, String::new());
@@ -222,6 +227,8 @@ impl PlayerBridge {
                     "The player is running but not signed in. Open the player window and sign in to Apple Music."
                         .to_string(),
                 updated_at: Some(crate::models::now_iso()),
+                output_devices: status.output_devices.clone(),
+                current_output: status.current_sink.clone(),
                 ..ProbeSnapshot::default()
             };
             return (snapshot, String::new());
@@ -241,6 +248,11 @@ impl PlayerBridge {
 
         let mut snapshot = snapshot_from_session(session, top_item);
         snapshot.source = "apple-music-web".to_string();
+        snapshot.output_devices = status.output_devices.clone();
+        snapshot.current_output = status.current_sink.clone();
+        if let Some(sink_error) = status.sink_error.as_ref().filter(|e| !e.is_empty()) {
+            snapshot.last_error = Some(format!("Audio routing: {sink_error}"));
+        }
 
         // Exact catalog-id match beats fuzzy title matching when available.
         if let (Some(catalog_id), Some(item)) = (status.catalog_id.as_deref(), top_item) {

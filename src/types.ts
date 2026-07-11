@@ -67,7 +67,13 @@ export type AppSettings = {
   }
   player: {
     autoQueue: boolean
+    audioOutputDevice: string
   }
+}
+
+export type AudioOutputDevice = {
+  id: string
+  label: string
 }
 
 export type BotStatus = {
@@ -108,6 +114,8 @@ export type ProbeSnapshot = {
   lastError: string | null
   sessions: ProbeSession[]
   updatedAt: string | null
+  outputDevices: AudioOutputDevice[]
+  currentOutput: string
 }
 
 export type DiagnosticsSnapshot = {

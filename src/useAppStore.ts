@@ -42,6 +42,7 @@ const defaultSettings: AppSettings = {
   },
   player: {
     autoQueue: true,
+    audioOutputDevice: '',
   },
 }
 
@@ -216,6 +217,31 @@ export function useAppStore() {
       setSettingsDraft(nextState.settings)
       hydratedDraft.current = true
       setNotice(enabled ? 'Auto-queue enabled.' : 'Auto-queue paused.')
+    }
+  }
+
+  const setAudioOutputDevice = async (deviceId: string) => {
+    setSettingsDraft((current) => ({
+      ...current,
+      player: {
+        ...current.player,
+        audioOutputDevice: deviceId,
+      },
+    }))
+
+    const nextState = await runAction('set-audio-output', () =>
+      saveSettings({
+        player: {
+          audioOutputDevice: deviceId,
+        },
+      }),
+    )
+
+    if (nextState) {
+      setState(nextState)
+      setSettingsDraft(nextState.settings)
+      hydratedDraft.current = true
+      setNotice(deviceId ? 'Player audio routed to the selected device.' : 'Player audio routed to the system default.')
     }
   }
 
@@ -418,6 +444,7 @@ export function useAppStore() {
     busyAction,
     saveDraftSettings,
     setAutoQueueEnabled,
+    setAudioOutputDevice,
     startBot,
     stopBot,
     submitManualRequest,

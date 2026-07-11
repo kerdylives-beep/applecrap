@@ -174,12 +174,25 @@ impl Default for AppleMusicSettings {
 #[serde(default, rename_all = "camelCase")]
 pub struct PlayerSettings {
     pub auto_queue: bool,
+    /// Browser deviceId of the audio output the player routes to.
+    /// Empty string = system default.
+    pub audio_output_device: String,
 }
 
 impl Default for PlayerSettings {
     fn default() -> Self {
-        Self { auto_queue: true }
+        Self {
+            auto_queue: true,
+            audio_output_device: String::new(),
+        }
     }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct AudioOutputDevice {
+    pub id: String,
+    pub label: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
@@ -251,6 +264,10 @@ pub struct ProbeSnapshot {
     pub last_error: Option<String>,
     pub sessions: Vec<ProbeSession>,
     pub updated_at: Option<String>,
+    #[serde(default)]
+    pub output_devices: Vec<AudioOutputDevice>,
+    #[serde(default)]
+    pub current_output: String,
 }
 
 impl Default for ProbeSnapshot {
@@ -269,6 +286,8 @@ impl Default for ProbeSnapshot {
             last_error: None,
             sessions: Vec::new(),
             updated_at: None,
+            output_devices: Vec::new(),
+            current_output: String::new(),
         }
     }
 }
@@ -371,6 +390,7 @@ pub struct AppleMusicSettingsPatch {
 #[serde(rename_all = "camelCase")]
 pub struct PlayerSettingsPatch {
     pub auto_queue: Option<bool>,
+    pub audio_output_device: Option<String>,
 }
 
 #[derive(Clone, Deserialize, Debug, Default)]
@@ -485,6 +505,9 @@ impl AppSettings {
         if let Some(player) = patch.player {
             if let Some(auto_queue) = player.auto_queue {
                 self.player.auto_queue = auto_queue;
+            }
+            if let Some(audio_output_device) = player.audio_output_device {
+                self.player.audio_output_device = audio_output_device.trim().to_string();
             }
         }
 

@@ -57,6 +57,98 @@
     }
   }
 
+  // --- Audio session keepalive -------------------------------------------
+  // A permanently-open silent stream keeps this app's audio session alive in
+  // Windows, so the volume mixer / routing tools (Wave Link, OBS) list the
+  // app from launch instead of only while a song plays.
+  let keepalive = null
+  function startKeepalive() {
+    if (keepalive) {
+      if (keepalive.state === 'suspended') {
+        keepalive.resume().catch(() => {})
+      }
+      return
+    }
+    try {
+      const context = new AudioContext()
+      const oscillator = context.createOscillator()
+      const gain = context.createGain()
+      // Not exactly zero: Chromium suspends output streams that render pure
+      // digital silence, which drops the audio session to inactive and hides
+      // the app from mixers. -140dB is far below audibility.
+      gain.gain.value = 1e-7
+      oscillator.frequency.value = 40
+      oscillator.connect(gain)
+      gain.connect(context.destination)
+      oscillator.start()
+      keepalive = context
+      if (context.state === 'suspended') {
+        context.resume().catch(() => {})
+      }
+    } catch (_) {
+      keepalive = null
+    }
+  }
+
+  // --- Output device routing ----------------------------------------------
+  // The desired sink is pushed from the app settings. It is applied to every
+  // current and future media element (and the keepalive context) so the
+  // player's audio can be pointed at e.g. a Wave Link virtual device.
+  const routing = { desired: '', devices: [], lastError: '' }
+
+  function applySinkTo(element) {
+    if (!element || typeof element.setSinkId !== 'function') {
+      return
+    }
+    const target = routing.desired || ''
+    if ((element.sinkId || '') === target) {
+      return
+    }
+    element.setSinkId(target).catch((error) => {
+      routing.lastError = String((error && error.message) || error)
+    })
+  }
+
+  function applySinkEverywhere() {
+    document.querySelectorAll('audio, video').forEach(applySinkTo)
+    if (keepalive && typeof keepalive.setSinkId === 'function') {
+      const target = routing.desired || ''
+      keepalive.setSinkId(target === '' ? '' : target).catch(() => {})
+    }
+  }
+
+  async function refreshOutputDevices() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      routing.devices = devices
+        .filter((device) => device.kind === 'audiooutput')
+        .map((device, index) => ({
+          id: device.deviceId,
+          label: device.label || 'Output device ' + (index + 1),
+        }))
+    } catch (_) {
+      routing.devices = []
+    }
+  }
+
+  // Initialization scripts run before the document exists, so the observer
+  // must attach lazily (a top-level observe(null) would kill this whole IIFE).
+  let observerAttached = false
+  function attachSinkObserver() {
+    if (observerAttached || !document.documentElement) {
+      return
+    }
+    try {
+      new MutationObserver(() => applySinkEverywhere()).observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+      })
+      observerAttached = true
+    } catch (_) {
+      /* retry on next tick */
+    }
+  }
+
   function playbackStateName(music) {
     try {
       const mk = window.MusicKit
@@ -73,7 +165,13 @@
   function snapshot() {
     const music = instance()
     if (!music) {
-      return { kind: 'status', ready: false }
+      return {
+        kind: 'status',
+        ready: false,
+        outputDevices: routing.devices,
+        currentSink: routing.desired || '',
+        sinkError: routing.lastError || null,
+      }
     }
 
     const item = music.nowPlayingItem || null
@@ -102,6 +200,9 @@
       itemId: item && item.id ? String(item.id) : null,
       durationMs:
         item && item.playbackDuration ? Math.round(item.playbackDuration * 1000) : null,
+      outputDevices: routing.devices,
+      currentSink: routing.desired || '',
+      sinkError: routing.lastError || null,
     }
   }
 
@@ -118,6 +219,17 @@
       const done = (ok, detail) =>
         report({ kind: 'result', tag, ok, detail: String(detail || '') })
       try {
+        // Routing works regardless of MusicKit/sign-in state.
+        if (op === 'setSink') {
+          routing.desired = id || ''
+          routing.lastError = ''
+          applySinkEverywhere()
+          return done(
+            true,
+            routing.desired ? 'Audio routed to the selected output device.' : 'Audio routed to the system default output.',
+          )
+        }
+
         const music = instance()
         if (!music) {
           return done(false, 'MusicKit is not ready yet.')
@@ -176,8 +288,16 @@
     }
   }
 
+  let tick = 0
   setInterval(() => {
+    tick += 1
+    attachSinkObserver()
+    startKeepalive()
     attachEvents()
+    applySinkEverywhere()
+    if (tick % 5 === 1) {
+      void refreshOutputDevices()
+    }
     report(snapshot())
   }, 2000)
 })();

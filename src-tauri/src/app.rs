@@ -639,6 +639,23 @@ impl AppContext {
         self.set_probe_snapshot(snapshot.clone(), session_signature)
             .await;
 
+        // Keep the player's audio output routed to the configured device. The
+        // bridge reports its current sink; push the setting until they agree
+        // (covers app start, player reloads, and settings changes alike).
+        if snapshot.status != "Disconnected" {
+            let desired = self.current_settings().await.player.audio_output_device;
+            if snapshot.current_output != desired {
+                let bridge_handle = self.handle.clone();
+                let context = Arc::clone(self);
+                tauri::async_runtime::spawn(async move {
+                    let _ = context
+                        .player_bridge
+                        .run_command(&bridge_handle, "setSink", Some(&desired))
+                        .await;
+                });
+            }
+        }
+
         if snapshot.matched {
             let already_confirmed = self.runtime.read().await.last_confirmed_queue_id.clone();
             if already_confirmed.as_deref() != snapshot.matched_queue_id.as_deref() {

@@ -405,6 +405,34 @@ function App() {
                 </strong>
                 <span>{playerNowPlayingLine(state.probe)}</span>
               </div>
+              <div className={styles.formGrid}>
+                <label>
+                  Audio output
+                  <select
+                    value={state.settings.player.audioOutputDevice}
+                    onChange={(event) => {
+                      void store.setAudioOutputDevice(event.target.value)
+                    }}
+                  >
+                    <option value="">System default</option>
+                    {state.probe.outputDevices
+                      .filter((device) => device.id !== '')
+                      .map((device) => (
+                        <option key={device.id} value={device.id}>
+                          {device.label}
+                        </option>
+                      ))}
+                    {state.settings.player.audioOutputDevice &&
+                    !state.probe.outputDevices.some(
+                      (device) => device.id === state.settings.player.audioOutputDevice,
+                    ) ? (
+                      <option value={state.settings.player.audioOutputDevice}>
+                        Saved device (not currently detected)
+                      </option>
+                    ) : null}
+                  </select>
+                </label>
+              </div>
             </SectionFrame>
 
             <SectionFrame
