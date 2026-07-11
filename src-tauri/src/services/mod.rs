@@ -1,4 +1,6 @@
 pub mod apple_catalog;
+#[cfg(windows)]
+pub mod audio_session;
 pub mod diagnostics;
 pub mod player_bridge;
 pub mod queue_engine;

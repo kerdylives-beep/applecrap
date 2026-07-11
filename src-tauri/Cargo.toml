@@ -1,6 +1,6 @@
 [package]
 name = "applecrap_alpha"
-version = "0.3.2-alpha.1"
+version = "0.3.3-alpha.1"
 description = "Portable AppleCrap Alpha rewrite"
 authors = ["KerdyLives"]
 edition = "2021"
@@ -28,3 +28,11 @@ tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process"
 tokio-native-tls = "0.3"
 uuid = { version = "1", features = ["serde", "v4"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[target."cfg(windows)".dependencies]
+windows = { version = "0.61", features = [
+    "Win32_Media_Audio",
+    "Win32_System_Com",
+    "Win32_Foundation",
+    "Win32_System_Diagnostics_ToolHelp",
+] }

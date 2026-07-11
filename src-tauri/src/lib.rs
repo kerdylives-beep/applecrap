@@ -14,6 +14,8 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             services::updater::clean_stale_artifacts();
+            #[cfg(windows)]
+            services::audio_session::spawn_session_labeler();
             let context = Arc::new(AppContext::initialize(app.handle().clone())?);
             context.start_background_services();
             app.manage(context);

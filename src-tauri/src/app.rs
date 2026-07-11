@@ -118,6 +118,14 @@ impl AppContext {
             tokio::time::sleep(Duration::from_secs(5)).await;
             let _ = update_context.check_for_updates().await;
         });
+
+        // Resume auto-queue for requests that were pending when the app last
+        // closed. Delayed so the embedded player has time to load MusicKit.
+        let resume_context = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            resume_context.ensure_queue_progress("startup").await;
+        });
     }
 
     pub async fn check_for_updates(self: &Arc<Self>) -> Result<AppState> {
