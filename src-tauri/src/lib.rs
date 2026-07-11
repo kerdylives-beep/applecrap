@@ -44,6 +44,36 @@ pub fn run() {
                     }
                 });
 
+                // Chromium only exposes audio output device ids/labels to
+                // origins holding microphone permission. Pre-grant it for the
+                // player origin so the "Audio output" routing dropdown can
+                // list real devices. No microphone is ever opened.
+                #[cfg(windows)]
+                let _ = player.with_webview(|webview| unsafe {
+                    use webview2_com::Microsoft::Web::WebView2::Win32::{
+                        ICoreWebView2Profile4, ICoreWebView2_13,
+                        COREWEBVIEW2_PERMISSION_KIND_MICROPHONE,
+                        COREWEBVIEW2_PERMISSION_STATE_ALLOW,
+                    };
+                    use windows::core::Interface;
+
+                    let grant = (|| -> windows::core::Result<()> {
+                        let core = webview.controller().CoreWebView2()?;
+                        let webview13: ICoreWebView2_13 = core.cast()?;
+                        let profile = webview13.Profile()?;
+                        let profile4: ICoreWebView2Profile4 = profile.cast()?;
+                        profile4.SetPermissionState(
+                            COREWEBVIEW2_PERMISSION_KIND_MICROPHONE,
+                            &windows::core::HSTRING::from("https://music.apple.com"),
+                            COREWEBVIEW2_PERMISSION_STATE_ALLOW,
+                            None,
+                        )
+                    })();
+                    if let Err(error) = grant {
+                        eprintln!("audio device permission grant failed: {error}");
+                    }
+                });
+
                 // The player window intentionally survives its own close (it
                 // only hides), so closing the main window must end the app or
                 // the player keeps the process alive in the background.

@@ -39,6 +39,7 @@ struct RuntimeState {
     legacy_import: LegacyImportStatus,
     last_confirmed_queue_id: Option<String>,
     last_session_signature: String,
+    last_devices_signature: String,
     last_probe_error: String,
     auto_handoff_in_flight: bool,
     update: Option<crate::models::UpdateInfo>,
@@ -80,6 +81,7 @@ impl AppContext {
                 legacy_import,
                 last_confirmed_queue_id: None,
                 last_session_signature: String::new(),
+                last_devices_signature: String::new(),
                 last_probe_error: String::new(),
                 auto_handoff_in_flight: false,
                 update: None,
@@ -711,9 +713,27 @@ impl AppContext {
     async fn set_probe_snapshot(&self, snapshot: ProbeSnapshot, session_signature: String) {
         let mut should_log_sessions = None;
         let mut should_log_error = None;
+        let mut should_log_devices = None;
 
         {
             let mut runtime = self.runtime.write().await;
+
+            let devices_signature = snapshot
+                .output_devices
+                .iter()
+                .map(|device| device.label.as_str())
+                .collect::<Vec<_>>()
+                .join(" | ");
+            if !snapshot.output_devices.is_empty()
+                && devices_signature != runtime.last_devices_signature
+            {
+                runtime.last_devices_signature = devices_signature.clone();
+                should_log_devices = Some(format!(
+                    "Player reports {} audio output device(s): {}",
+                    snapshot.output_devices.len(),
+                    devices_signature
+                ));
+            }
             if !session_signature.is_empty() && session_signature != runtime.last_session_signature
             {
                 runtime.last_session_signature = session_signature;
@@ -765,6 +785,10 @@ impl AppContext {
         if let Some(error) = should_log_error {
             self.add_log(LogLevel::Warn, format!("Now Playing unavailable: {error}"))
                 .await;
+        }
+
+        if let Some(devices) = should_log_devices {
+            self.add_log(LogLevel::Info, devices).await;
         }
     }
 
