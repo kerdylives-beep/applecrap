@@ -238,7 +238,7 @@ pub struct LogEntry {
     pub timestamp: String,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProbeSession {
     pub app_id: String,
@@ -246,6 +246,28 @@ pub struct ProbeSession {
     pub title: String,
     pub artist: String,
     pub album: String,
+}
+
+impl ProbeSnapshot {
+    /// Compares everything a viewer would notice, ignoring `updated_at` (which
+    /// ticks every probe cycle). Used to skip redundant state broadcasts while
+    /// nothing is actually changing.
+    pub fn is_equivalent_to(&self, other: &Self) -> bool {
+        self.source == other.source
+            && self.app_id == other.app_id
+            && self.status == other.status
+            && self.title == other.title
+            && self.artist == other.artist
+            && self.album == other.album
+            && self.matched == other.matched
+            && self.matched_queue_id == other.matched_queue_id
+            && (self.confidence - other.confidence).abs() < f32::EPSILON
+            && self.explanation == other.explanation
+            && self.last_error == other.last_error
+            && self.sessions == other.sessions
+            && self.output_devices == other.output_devices
+            && self.current_output == other.current_output
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

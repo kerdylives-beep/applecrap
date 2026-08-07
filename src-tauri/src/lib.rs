@@ -25,7 +25,7 @@ pub fn run() {
             // playback webview is never destroyed mid-stream.
             #[cfg(desktop)]
             {
-                let player = tauri::WebviewWindowBuilder::new(
+                let mut player_builder = tauri::WebviewWindowBuilder::new(
                     app,
                     services::player_bridge::PLAYER_WINDOW_LABEL,
                     tauri::WebviewUrl::External("https://music.apple.com/".parse().unwrap()),
@@ -33,16 +33,42 @@ pub fn run() {
                 .title("AppleCrap Player — Apple Music")
                 .inner_size(1150.0, 820.0)
                 .visible(false)
-                .initialization_script(include_str!("scripts/player-bridge.js"))
-                .build()?;
+                .initialization_script(include_str!("scripts/player-bridge.js"));
+
+                // wry builds a separate WebView2 environment per webview, and
+                // WebView2 refuses to create a second environment for the same
+                // user data folder with different browser arguments — the
+                // window then silently fails to build. Mirror the main
+                // window's configured args here (read from config so the two
+                // can never drift out of sync).
+                #[cfg(windows)]
+                {
+                    if let Some(args) = app
+                        .config()
+                        .app
+                        .windows
+                        .iter()
+                        .find(|window| window.label == "main")
+                        .and_then(|window| window.additional_browser_args.clone())
+                    {
+                        player_builder = player_builder.additional_browser_args(&args);
+                    }
+                }
+
+                let player = player_builder.build()?;
 
                 let player_handle = player.clone();
                 player.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                         api.prevent_close();
                         let _ = player_handle.hide();
+                        services::player_bridge::set_player_rendering(&player_handle, false);
                     }
                 });
+
+                // The window starts hidden, so start with rendering off too.
+                // Audio and the bridge keep running; only drawing is skipped.
+                services::player_bridge::set_player_rendering(&player, false);
 
                 // Chromium only exposes audio output device ids/labels to
                 // origins holding microphone permission. Pre-grant it for the
@@ -81,6 +107,13 @@ pub fn run() {
                     let exit_handle = app.handle().clone();
                     main.on_window_event(move |event| {
                         if let tauri::WindowEvent::Destroyed = event {
+                            // Persist anything still sitting in the debounced
+                            // write buffer before the process goes away.
+                            if let Some(context) =
+                                exit_handle.try_state::<Arc<AppContext>>().map(|c| c.inner().clone())
+                            {
+                                tauri::async_runtime::block_on(context.flush_pending_state());
+                            }
                             exit_handle.exit(0);
                         }
                     });

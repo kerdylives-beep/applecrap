@@ -16,6 +16,24 @@ use crate::{
 
 pub const PLAYER_WINDOW_LABEL: &str = "player";
 
+/// Start or stop the player webview's rendering.
+///
+/// Hiding the native window does not tell WebView2 to stop compositing, so a
+/// hidden player kept a GPU and renderer process busy drawing frames nobody
+/// could see (measured: ~11% of a CPU core while idle and hidden). Toggling
+/// the controller's visibility skips rendering entirely. Audio is unaffected —
+/// playback continues while rendering is off.
+pub fn set_player_rendering(window: &tauri::WebviewWindow, rendering: bool) {
+    #[cfg(windows)]
+    {
+        let _ = window.with_webview(move |webview| unsafe {
+            let _ = webview.controller().SetIsVisible(rendering);
+        });
+    }
+    #[cfg(not(windows))]
+    let _ = (window, rendering);
+}
+
 /// How old a bridge status may be before we consider the player disconnected.
 const STATUS_STALE_AFTER: Duration = Duration::from_secs(8);
 /// How long a dispatched command may wait for the player to answer.

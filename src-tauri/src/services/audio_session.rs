@@ -34,15 +34,40 @@ pub fn spawn_session_labeler() {
                 .ok()
                 .map(|path| format!("{},0", path.display()));
 
+            // Sessions appear when audio starts, so poll — but once our
+            // session is labeled the work is pure overhead, so back off. A new
+            // unlabeled session (player reload, device switch) speeds it up
+            // again on the next tick.
+            let mut cache = LabelCache::default();
+            let mut interval = Duration::from_secs(3);
             loop {
-                let _ = relabel_descendant_sessions(&exe_name, icon_path.as_deref());
-                thread::sleep(Duration::from_secs(4));
+                let labeled_any =
+                    relabel_descendant_sessions(&exe_name, icon_path.as_deref(), &mut cache)
+                        .unwrap_or(false);
+                interval = if labeled_any {
+                    Duration::from_secs(3)
+                } else {
+                    (interval * 2).min(Duration::from_secs(30))
+                };
+                thread::sleep(interval);
             }
         })
         .ok();
 }
 
-fn relabel_descendant_sessions(exe_name: &str, icon_path: Option<&str>) -> windows::core::Result<()> {
+/// Remembers verdicts per pid so the expensive process-tree walk only runs for
+/// pids we have never judged before.
+#[derive(Default)]
+struct LabelCache {
+    ours: std::collections::HashSet<u32>,
+    not_ours: std::collections::HashSet<u32>,
+}
+
+fn relabel_descendant_sessions(
+    exe_name: &str,
+    icon_path: Option<&str>,
+    cache: &mut LabelCache,
+) -> windows::core::Result<bool> {
     use windows::core::HSTRING;
     use windows::Win32::Media::Audio::{
         eRender, IAudioSessionControl2, IMMDeviceEnumerator, MMDeviceEnumerator,
@@ -50,9 +75,12 @@ fn relabel_descendant_sessions(exe_name: &str, icon_path: Option<&str>) -> windo
     };
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
-    let parents = snapshot_parent_map();
+    // Built lazily: enumerating every process on the machine is the expensive
+    // part of this pass, and it is only needed when an unknown pid shows up.
+    let mut parents: Option<std::collections::HashMap<u32, (u32, String)>> = None;
     let display_name = HSTRING::from(MIXER_DISPLAY_NAME);
     let icon = icon_path.map(HSTRING::from);
+    let mut labeled_any = false;
 
     unsafe {
         let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
@@ -78,8 +106,21 @@ fn relabel_descendant_sessions(exe_name: &str, icon_path: Option<&str>) -> windo
                 let Ok(session_pid) = control2.GetProcessId() else {
                     continue;
                 };
-                if session_pid == 0 || !has_ancestor_named(&parents, session_pid, exe_name) {
+                if session_pid == 0 || cache.not_ours.contains(&session_pid) {
                     continue;
+                }
+
+                if !cache.ours.contains(&session_pid) {
+                    let map = match parents.as_ref() {
+                        Some(map) => map,
+                        None => parents.insert(snapshot_parent_map()),
+                    };
+                    if has_ancestor_named(map, session_pid, exe_name) {
+                        cache.ours.insert(session_pid);
+                    } else {
+                        cache.not_ours.insert(session_pid);
+                        continue;
+                    }
                 }
 
                 let already_labeled = control2
@@ -98,11 +139,17 @@ fn relabel_descendant_sessions(exe_name: &str, icon_path: Option<&str>) -> windo
                 if let Some(icon) = icon.as_ref() {
                     let _ = control2.SetIconPath(icon, std::ptr::null());
                 }
+                labeled_any = true;
             }
         }
     }
 
-    Ok(())
+    // Pids get recycled; keep the negative cache from growing without bound.
+    if cache.not_ours.len() > 512 {
+        cache.not_ours.clear();
+    }
+
+    Ok(labeled_any)
 }
 
 /// pid -> (parent pid, lowercased exe name) for every running process.

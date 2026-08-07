@@ -6,8 +6,8 @@ AppleCrap Alpha is a portable Windows app for taking song requests from Twitch c
 
 ## Download
 
-- ⬇️ [Download AppleCrap Alpha for Windows](https://github.com/kerdylives-beep/applecrap/releases/download/v0.3.5-alpha.1/AppleCrap.Alpha.zip)
-- 📦 Latest portable zip: `v0.3.5-alpha.1`
+- ⬇️ [Download AppleCrap Alpha for Windows](https://github.com/kerdylives-beep/applecrap/releases/download/v0.3.6-alpha.1/AppleCrap.Alpha.zip)
+- 📦 Latest portable zip: `v0.3.6-alpha.1`
 - 🪟 Unzip it, run `AppleCrap Alpha.exe`, and keep the `data` folder beside it.
 
 ## What It Does
@@ -69,6 +69,8 @@ The app asks for:
 4. That's it. Matched requests auto-queue into Apple Music in order (FIFO), each one is confirmed once it actually starts playing, and the streamer's own playlist picks back up automatically once the request queue is empty.
 
 Portable storage uses `./data` beside the executable. If that folder is not writable, the app falls back to Local AppData and tells you in the UI.
+
+Your keyboard's **media keys** (play/pause, next, previous) control the player, and the track shows up in the Windows "now playing" popup — the same way any other music app behaves. The player window can stay hidden the whole time; while it is hidden it stops drawing entirely, so it costs almost nothing to leave running beside a game.
 
 ## Chat Commands
 

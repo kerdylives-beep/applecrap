@@ -1,4 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use anyhow::{anyhow, Result};
 use tauri::{async_runtime::JoinHandle, AppHandle, Emitter};
@@ -21,6 +27,9 @@ pub struct AppContext {
     pub handle: AppHandle,
     pub storage: SettingsStore,
     pub player_bridge: PlayerBridge,
+    /// Set when persisted state has unwritten changes awaiting the debounced
+    /// flush (see `mark_persist_dirty`).
+    pending_persist: AtomicBool,
     apple_catalog: AppleCatalog,
     persisted: RwLock<PersistedState>,
     runtime: RwLock<RuntimeState>,
@@ -68,6 +77,7 @@ impl AppContext {
         Ok(Self {
             handle,
             player_bridge: PlayerBridge::new(),
+            pending_persist: AtomicBool::new(false),
             apple_catalog: AppleCatalog::new(),
             storage,
             persisted: RwLock::new(persisted),
@@ -119,6 +129,18 @@ impl AppContext {
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(Duration::from_secs(5)).await;
             let _ = update_context.check_for_updates().await;
+        });
+
+        // Debounced writer for low-stakes state changes (log lines). Queue and
+        // settings mutations still write through immediately.
+        let persist_context = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(3)).await;
+                if persist_context.pending_persist.load(Ordering::Relaxed) {
+                    let _ = persist_context.save_persisted().await;
+                }
+            }
         });
 
         // Resume auto-queue for requests that were pending when the app last
@@ -285,14 +307,33 @@ impl AppContext {
         }
 
         let _ = self.storage.append_runtime_log(&runtime_line);
-        let _ = self.save_persisted().await;
+        // Log lines are already durable in runtime.log; the copy inside
+        // state.json can ride the debounced flush instead of forcing a full
+        // serialize + file write per line.
+        self.mark_persist_dirty();
         let _ = self.handle.emit("logAppended", entry);
         self.emit_state().await;
     }
 
     pub async fn save_persisted(&self) -> Result<()> {
         let state = self.persisted.read().await.clone();
+        self.pending_persist.store(false, Ordering::Relaxed);
         self.storage.save_persisted_state(&state)
+    }
+
+    /// Queue a state write for the background flusher. Used for low-stakes,
+    /// high-frequency changes (log lines); queue and settings mutations still
+    /// persist immediately via `save_persisted`.
+    fn mark_persist_dirty(&self) {
+        self.pending_persist.store(true, Ordering::Relaxed);
+    }
+
+    /// Write out any debounced changes. Called on shutdown so a queued log
+    /// flush is never lost when the app closes.
+    pub async fn flush_pending_state(&self) {
+        if self.pending_persist.load(Ordering::Relaxed) {
+            let _ = self.save_persisted().await;
+        }
     }
 
     pub async fn current_settings(&self) -> crate::models::AppSettings {
@@ -714,6 +755,7 @@ impl AppContext {
         let mut should_log_sessions = None;
         let mut should_log_error = None;
         let mut should_log_devices = None;
+        let unchanged;
 
         {
             let mut runtime = self.runtime.write().await;
@@ -761,7 +803,19 @@ impl AppContext {
                 runtime.last_probe_error.clear();
             }
 
+            // The probe runs every 2.5s forever. When nothing a viewer could
+            // notice has changed, skip the broadcast entirely: emitting means
+            // cloning the whole app state, serializing it, crossing IPC, and
+            // re-rendering the dashboard.
+            unchanged = runtime.probe.is_equivalent_to(&snapshot)
+                && should_log_sessions.is_none()
+                && should_log_error.is_none()
+                && should_log_devices.is_none();
             runtime.probe = snapshot.clone();
+        }
+
+        if unchanged {
+            return;
         }
 
         let _ = self.handle.emit("probeSnapshot", snapshot);

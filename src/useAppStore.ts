@@ -92,7 +92,6 @@ export function useAppStore() {
   useEffect(() => {
     let cancelled = false
     let unsubscribe: () => void = () => {}
-    let pollTimer: number | null = null
     const loadState = async (silent = false) => {
       const nextState = await refreshState(silent)
       if (cancelled) {
@@ -111,9 +110,10 @@ export function useAppStore() {
       }
     }
 
-    pollTimer = window.setInterval(() => {
-      refreshSilently()
-    }, 1500)
+    // No polling timer: the backend pushes `stateChanged` on every mutation,
+    // so a periodic full-state fetch was duplicating that work (a complete
+    // serialize + IPC round trip + React re-render every 1.5s while idle).
+    // Focus/visibility refreshes stay as a catch-up for missed events.
     window.addEventListener('focus', handleWindowFocus)
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
@@ -131,9 +131,6 @@ export function useAppStore() {
     return () => {
       cancelled = true
       unsubscribe()
-      if (pollTimer !== null) {
-        window.clearInterval(pollTimer)
-      }
       window.removeEventListener('focus', handleWindowFocus)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }

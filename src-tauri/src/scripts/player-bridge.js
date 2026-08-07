@@ -134,15 +134,37 @@
   // Initialization scripts run before the document exists, so the observer
   // must attach lazily (a top-level observe(null) would kill this whole IIFE).
   let observerAttached = false
+  let sinkSweepScheduled = false
+
+  // music.apple.com mutates its DOM constantly (progress bar, scrollers), and
+  // a full-document querySelectorAll per mutation was burning CPU for nothing.
+  // Only react when element nodes are actually added, and coalesce bursts into
+  // a single sweep.
+  function scheduleSinkSweep() {
+    if (sinkSweepScheduled) {
+      return
+    }
+    sinkSweepScheduled = true
+    setTimeout(() => {
+      sinkSweepScheduled = false
+      applySinkEverywhere()
+    }, 400)
+  }
+
   function attachSinkObserver() {
     if (observerAttached || !document.documentElement) {
       return
     }
     try {
-      new MutationObserver(() => applySinkEverywhere()).observe(document.documentElement, {
-        childList: true,
-        subtree: true,
+      const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          if (mutation.addedNodes.length > 0) {
+            scheduleSinkSweep()
+            return
+          }
+        }
       })
+      observer.observe(document.documentElement, { childList: true, subtree: true })
       observerAttached = true
     } catch (_) {
       /* retry on next tick */
@@ -280,12 +302,35 @@
       return
     }
     try {
-      music.addEventListener('nowPlayingItemDidChange', () => report(snapshot()))
-      music.addEventListener('playbackStateDidChange', () => report(snapshot()))
+      music.addEventListener('nowPlayingItemDidChange', () => reportStatus(true))
+      music.addEventListener('playbackStateDidChange', () => reportStatus(true))
       eventsAttached = true
     } catch (_) {
       /* retry on next tick */
     }
+  }
+
+  // Status reporting: send whenever something changed, plus a heartbeat well
+  // inside the Rust side's 8s staleness window so an idle player is never
+  // mistaken for a disconnected one.
+  const HEARTBEAT_MS = 4000
+  let lastReportBody = ''
+  let lastReportAt = 0
+
+  function reportStatus(force) {
+    const status = snapshot()
+    const body = JSON.stringify(status)
+    const now = Date.now()
+    const changed = body !== lastReportBody
+    const heartbeatDue = now - lastReportAt >= HEARTBEAT_MS
+
+    if (!force && !changed && !heartbeatDue) {
+      return
+    }
+
+    lastReportBody = body
+    lastReportAt = now
+    report(status)
   }
 
   let tick = 0
@@ -294,10 +339,14 @@
     attachSinkObserver()
     startKeepalive()
     attachEvents()
-    applySinkEverywhere()
-    if (tick % 5 === 1) {
+    // The observer catches new media elements; this is just a periodic safety
+    // net, so it does not need to run every tick.
+    if (tick % 5 === 0) {
+      applySinkEverywhere()
+    }
+    if (tick % 15 === 1) {
       void refreshOutputDevices()
     }
-    report(snapshot())
+    reportStatus(false)
   }, 2000)
 })();

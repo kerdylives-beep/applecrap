@@ -184,6 +184,7 @@ pub fn player_show(app: tauri::AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window(crate::services::player_bridge::PLAYER_WINDOW_LABEL)
         .ok_or_else(|| "The player window is not available.".to_string())?;
+    crate::services::player_bridge::set_player_rendering(&window, true);
     window.show().map_err(|error| error.to_string())?;
     window.set_focus().map_err(|error| error.to_string())
 }
@@ -194,7 +195,9 @@ pub fn player_hide(app: tauri::AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window(crate::services::player_bridge::PLAYER_WINDOW_LABEL)
         .ok_or_else(|| "The player window is not available.".to_string())?;
-    window.hide().map_err(|error| error.to_string())
+    window.hide().map_err(|error| error.to_string())?;
+    crate::services::player_bridge::set_player_rendering(&window, false);
+    Ok(())
 }
 
 #[tauri::command]

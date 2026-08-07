@@ -1,6 +1,6 @@
 [package]
 name = "applecrap_alpha"
-version = "0.3.5-alpha.1"
+version = "0.3.6-alpha.1"
 description = "Portable AppleCrap Alpha rewrite"
 authors = ["KerdyLives"]
 edition = "2021"
@@ -8,6 +8,14 @@ edition = "2021"
 [lib]
 name = "applecrap_alpha_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[profile.release]
+# The app idles beside a game all stream, so favour a small, fast binary.
+# Unwinding is kept (panic = "abort" is unsafe with Tauri's event loop).
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
