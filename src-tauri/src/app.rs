@@ -52,6 +52,7 @@ struct RuntimeState {
     last_probe_error: String,
     auto_handoff_in_flight: bool,
     update: Option<crate::models::UpdateInfo>,
+    media_keys_claimed: bool,
 }
 
 impl AppContext {
@@ -95,6 +96,7 @@ impl AppContext {
                 last_probe_error: String::new(),
                 auto_handoff_in_flight: false,
                 update: None,
+                media_keys_claimed: false,
             }),
             twitch_connection: Mutex::new(None),
         })
@@ -682,6 +684,9 @@ impl AppContext {
         self.set_probe_snapshot(snapshot.clone(), session_signature)
             .await;
 
+        #[cfg(desktop)]
+        self.sync_media_key_claim(&snapshot).await;
+
         // Keep the player's audio output routed to the configured device. The
         // bridge reports its current sink; push the setting until they agree
         // (covers app start, player reloads, and settings changes alike).
@@ -749,6 +754,73 @@ impl AppContext {
         }
 
         Ok(snapshot)
+    }
+
+    /// Media keys are claimed only while the player actually holds a track.
+    ///
+    /// Windows routes media keys to whichever media session it considers
+    /// "current", and that arbitration regularly favours a long-idle browser
+    /// over the app that is actually playing. Claiming the keys outright is
+    /// the only reliable fix, but claiming them permanently would steal them
+    /// from other players — so the claim follows the music: held while a track
+    /// is loaded (playing or paused), released as soon as it is not.
+    #[cfg(desktop)]
+    pub async fn sync_media_key_claim(self: &Arc<Self>, probe: &ProbeSnapshot) {
+        use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+        let enabled = self.current_settings().await.player.media_keys;
+        let holds_track = matches!(probe.status.as_str(), "Playing" | "Paused");
+        let want = enabled && holds_track;
+
+        {
+            let runtime = self.runtime.read().await;
+            if runtime.media_keys_claimed == want {
+                return;
+            }
+        }
+
+        let manager = self.handle.global_shortcut();
+        let shortcuts = media_key_shortcuts();
+        let outcome = if want {
+            shortcuts
+                .iter()
+                .try_for_each(|shortcut| manager.register(*shortcut))
+        } else {
+            shortcuts
+                .iter()
+                .try_for_each(|shortcut| manager.unregister(*shortcut))
+        };
+
+        match outcome {
+            Ok(()) => {
+                let mut runtime = self.runtime.write().await;
+                runtime.media_keys_claimed = want;
+            }
+            Err(error) => {
+                // Another app may hold the keys; try again on a later cycle.
+                self.add_log(
+                    LogLevel::Debug,
+                    format!(
+                        "Media key {} failed: {error}",
+                        if want { "claim" } else { "release" }
+                    ),
+                )
+                .await;
+            }
+        }
+    }
+
+    /// Handle one media key press by driving the embedded player directly.
+    #[cfg(desktop)]
+    pub async fn handle_media_key(self: &Arc<Self>, op: &str) {
+        let result = self
+            .player_bridge
+            .run_command(&self.handle, op, None)
+            .await;
+        if let Err(error) = result {
+            self.add_log(LogLevel::Warn, format!("Media key {op} failed: {error}"))
+                .await;
+        }
     }
 
     async fn set_probe_snapshot(&self, snapshot: ProbeSnapshot, session_signature: String) {
@@ -1144,6 +1216,31 @@ impl AppContext {
             Some(id) => persisted.queue.iter().find(|item| item.id == id).cloned(),
             None => persisted.queue.first().cloned(),
         }
+    }
+}
+
+/// The media keys AppleCrap claims while it holds a track.
+#[cfg(desktop)]
+pub fn media_key_shortcuts() -> [tauri_plugin_global_shortcut::Shortcut; 3] {
+    use tauri_plugin_global_shortcut::{Code, Shortcut};
+
+    [
+        Shortcut::new(None, Code::MediaPlayPause),
+        Shortcut::new(None, Code::MediaTrackNext),
+        Shortcut::new(None, Code::MediaTrackPrevious),
+    ]
+}
+
+/// Map a pressed media key to a player bridge operation.
+#[cfg(desktop)]
+pub fn media_key_op(shortcut: &tauri_plugin_global_shortcut::Shortcut) -> Option<&'static str> {
+    use tauri_plugin_global_shortcut::Code;
+
+    match shortcut.key {
+        Code::MediaPlayPause => Some("togglePlayPause"),
+        Code::MediaTrackNext => Some("skip"),
+        Code::MediaTrackPrevious => Some("previous"),
+        _ => None,
     }
 }
 

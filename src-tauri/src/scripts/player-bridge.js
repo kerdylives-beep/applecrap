@@ -280,9 +280,19 @@
           case 'pause':
             music.pause()
             return done(true, 'Playback paused.')
+          case 'togglePlayPause':
+            if (isPlaying(music)) {
+              music.pause()
+              return done(true, 'Playback paused.')
+            }
+            await music.play()
+            return done(true, 'Playback resumed.')
           case 'skip':
             await music.skipToNextItem()
             return done(true, 'Skipped to the next item.')
+          case 'previous':
+            await music.skipToPreviousItem()
+            return done(true, 'Skipped to the previous item.')
           default:
             return done(false, 'Unknown bridge operation: ' + op)
         }

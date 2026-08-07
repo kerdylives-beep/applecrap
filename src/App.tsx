@@ -432,6 +432,16 @@ function App() {
                     ) : null}
                   </select>
                 </label>
+                <label className={styles.actionToggle}>
+                  <input
+                    type="checkbox"
+                    checked={state.settings.player.mediaKeys}
+                    onChange={(event) => {
+                      void store.setMediaKeysEnabled(event.target.checked)
+                    }}
+                  />
+                  <span>Media keys control AppleCrap while a track is loaded</span>
+                </label>
               </div>
             </SectionFrame>
 

@@ -1,6 +1,6 @@
 [package]
 name = "applecrap_alpha"
-version = "0.3.6-alpha.1"
+version = "0.3.7-alpha.1"
 description = "Portable AppleCrap Alpha rewrite"
 authors = ["KerdyLives"]
 edition = "2021"
@@ -36,6 +36,9 @@ tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process"
 tokio-native-tls = "0.3"
 uuid = { version = "1", features = ["serde", "v4"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
+tauri-plugin-global-shortcut = "2"
 
 [target."cfg(windows)".dependencies]
 webview2-com = "0.38"

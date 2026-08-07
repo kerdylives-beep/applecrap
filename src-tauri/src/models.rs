@@ -177,6 +177,8 @@ pub struct PlayerSettings {
     /// Browser deviceId of the audio output the player routes to.
     /// Empty string = system default.
     pub audio_output_device: String,
+    /// Claim the keyboard's media keys while the player has a track loaded.
+    pub media_keys: bool,
 }
 
 impl Default for PlayerSettings {
@@ -184,6 +186,7 @@ impl Default for PlayerSettings {
         Self {
             auto_queue: true,
             audio_output_device: String::new(),
+            media_keys: true,
         }
     }
 }
@@ -413,6 +416,7 @@ pub struct AppleMusicSettingsPatch {
 pub struct PlayerSettingsPatch {
     pub auto_queue: Option<bool>,
     pub audio_output_device: Option<String>,
+    pub media_keys: Option<bool>,
 }
 
 #[derive(Clone, Deserialize, Debug, Default)]
@@ -530,6 +534,9 @@ impl AppSettings {
             }
             if let Some(audio_output_device) = player.audio_output_device {
                 self.player.audio_output_device = audio_output_device.trim().to_string();
+            }
+            if let Some(media_keys) = player.media_keys {
+                self.player.media_keys = media_keys;
             }
         }
 

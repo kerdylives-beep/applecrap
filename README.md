@@ -6,8 +6,8 @@ AppleCrap Alpha is a portable Windows app for taking song requests from Twitch c
 
 ## Download
 
-- ⬇️ [Download AppleCrap Alpha for Windows](https://github.com/kerdylives-beep/applecrap/releases/download/v0.3.6-alpha.1/AppleCrap.Alpha.zip)
-- 📦 Latest portable zip: `v0.3.6-alpha.1`
+- ⬇️ [Download AppleCrap Alpha for Windows](https://github.com/kerdylives-beep/applecrap/releases/download/v0.3.7-alpha.1/AppleCrap.Alpha.zip)
+- 📦 Latest portable zip: `v0.3.7-alpha.1`
 - 🪟 Unzip it, run `AppleCrap Alpha.exe`, and keep the `data` folder beside it.
 
 ## What It Does
@@ -70,7 +70,9 @@ The app asks for:
 
 Portable storage uses `./data` beside the executable. If that folder is not writable, the app falls back to Local AppData and tells you in the UI.
 
-Your keyboard's **media keys** (play/pause, next, previous) control the player, and the track shows up in the Windows "now playing" popup — the same way any other music app behaves. The player window can stay hidden the whole time; while it is hidden it stops drawing entirely, so it costs almost nothing to leave running beside a game.
+Your keyboard's **media keys** (play/pause, next, previous) control the player while it has a track loaded — no need to focus the app first. When AppleCrap is not holding a track, the keys go back to your other apps, so they only take over the keys while they are actually the thing playing. You can turn this off from the player section of the dashboard. The current track also shows in the Windows "now playing" popup.
+
+The player window can stay hidden the whole time; while hidden it stops drawing entirely, so it costs almost nothing to leave running beside a game.
 
 ## Chat Commands
 

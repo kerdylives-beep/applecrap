@@ -14,6 +14,29 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             services::updater::clean_stale_artifacts();
+
+            // Media keys are claimed dynamically (see
+            // AppContext::sync_media_key_claim); this only installs the
+            // handler that routes a press into the embedded player.
+            #[cfg(desktop)]
+            app.handle().plugin(
+                tauri_plugin_global_shortcut::Builder::new()
+                    .with_handler(|app, shortcut, event| {
+                        if event.state() != tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                            return;
+                        }
+                        let Some(op) = app::media_key_op(shortcut) else {
+                            return;
+                        };
+                        if let Some(context) = app.try_state::<Arc<AppContext>>() {
+                            let context = context.inner().clone();
+                            tauri::async_runtime::spawn(async move {
+                                context.handle_media_key(op).await;
+                            });
+                        }
+                    })
+                    .build(),
+            )?;
             #[cfg(windows)]
             services::audio_session::spawn_session_labeler();
             let context = Arc::new(AppContext::initialize(app.handle().clone())?);

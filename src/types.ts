@@ -68,6 +68,7 @@ export type AppSettings = {
   player: {
     autoQueue: boolean
     audioOutputDevice: string
+    mediaKeys: boolean
   }
 }
 

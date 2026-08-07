@@ -43,6 +43,7 @@ const defaultSettings: AppSettings = {
   player: {
     autoQueue: true,
     audioOutputDevice: '',
+    mediaKeys: true,
   },
 }
 
@@ -239,6 +240,35 @@ export function useAppStore() {
       setSettingsDraft(nextState.settings)
       hydratedDraft.current = true
       setNotice(deviceId ? 'Player audio routed to the selected device.' : 'Player audio routed to the system default.')
+    }
+  }
+
+  const setMediaKeysEnabled = async (enabled: boolean) => {
+    setSettingsDraft((current) => ({
+      ...current,
+      player: {
+        ...current.player,
+        mediaKeys: enabled,
+      },
+    }))
+
+    const nextState = await runAction('toggle-media-keys', () =>
+      saveSettings({
+        player: {
+          mediaKeys: enabled,
+        },
+      }),
+    )
+
+    if (nextState) {
+      setState(nextState)
+      setSettingsDraft(nextState.settings)
+      hydratedDraft.current = true
+      setNotice(
+        enabled
+          ? 'Media keys control AppleCrap while a track is loaded.'
+          : 'Media keys left to other apps.',
+      )
     }
   }
 
@@ -442,6 +472,7 @@ export function useAppStore() {
     saveDraftSettings,
     setAutoQueueEnabled,
     setAudioOutputDevice,
+    setMediaKeysEnabled,
     startBot,
     stopBot,
     submitManualRequest,
