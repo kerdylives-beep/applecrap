@@ -206,6 +206,51 @@ pub struct AppSettings {
     pub apple_music: AppleMusicSettings,
     #[serde(alias = "automation")]
     pub player: PlayerSettings,
+    #[serde(default)]
+    pub overlay: OverlaySettings,
+}
+
+/// What the overlay page renders. Built fresh per request; the overlay polls.
+#[derive(Clone, Serialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct OverlayState {
+    pub playing: bool,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub artwork_url: Option<String>,
+    pub requested_by: Option<String>,
+    pub show_queue: bool,
+    pub queue: Vec<OverlayQueueItem>,
+}
+
+#[derive(Clone, Serialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct OverlayQueueItem {
+    pub title: String,
+    pub artist: String,
+    pub requested_by: String,
+}
+
+/// The browser-source overlay served on localhost for OBS.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(default, rename_all = "camelCase")]
+pub struct OverlaySettings {
+    pub enabled: bool,
+    pub port: u16,
+    pub show_queue: bool,
+    pub queue_count: u8,
+}
+
+impl Default for OverlaySettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            port: 4747,
+            show_queue: true,
+            queue_count: 3,
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -293,6 +338,8 @@ pub struct ProbeSnapshot {
     pub output_devices: Vec<AudioOutputDevice>,
     #[serde(default)]
     pub current_output: String,
+    #[serde(default)]
+    pub artwork_url: Option<String>,
 }
 
 impl Default for ProbeSnapshot {
@@ -313,6 +360,7 @@ impl Default for ProbeSnapshot {
             updated_at: None,
             output_devices: Vec::new(),
             current_output: String::new(),
+            artwork_url: None,
         }
     }
 }
@@ -426,6 +474,16 @@ pub struct SaveSettingsPayload {
     pub request_limits: Option<RequestLimitsPatch>,
     pub apple_music: Option<AppleMusicSettingsPatch>,
     pub player: Option<PlayerSettingsPatch>,
+    pub overlay: Option<OverlaySettingsPatch>,
+}
+
+#[derive(Clone, Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct OverlaySettingsPatch {
+    pub enabled: Option<bool>,
+    pub port: Option<u16>,
+    pub show_queue: Option<bool>,
+    pub queue_count: Option<u8>,
 }
 
 #[derive(Clone, Deserialize, Debug)]
@@ -537,6 +595,21 @@ impl AppSettings {
             }
             if let Some(media_keys) = player.media_keys {
                 self.player.media_keys = media_keys;
+            }
+        }
+
+        if let Some(overlay) = patch.overlay {
+            if let Some(enabled) = overlay.enabled {
+                self.overlay.enabled = enabled;
+            }
+            if let Some(port) = overlay.port {
+                self.overlay.port = port;
+            }
+            if let Some(show_queue) = overlay.show_queue {
+                self.overlay.show_queue = show_queue;
+            }
+            if let Some(queue_count) = overlay.queue_count {
+                self.overlay.queue_count = queue_count;
             }
         }
 

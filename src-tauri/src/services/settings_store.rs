@@ -219,6 +219,7 @@ impl LegacySettings {
             request_limits: self.request_limits.into_current(),
             apple_music: self.apple_music.into_current(),
             player: Default::default(),
+            overlay: Default::default(),
         }
     }
 }

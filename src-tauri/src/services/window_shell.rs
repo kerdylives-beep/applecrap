@@ -29,6 +29,20 @@ fn validate_external_target(target: &str) -> Result<()> {
     Ok(())
 }
 
+/// Opens the local overlay in the default browser. The URL is built here from
+/// a port number rather than accepted from the caller, so this cannot become a
+/// general "open any link" hole alongside the Apple-Music-only rule above.
+pub fn open_overlay_preview(port: u16) -> Result<()> {
+    let target = format!("http://127.0.0.1:{port}/");
+    let mut command = Command::new("rundll32.exe");
+    command.args(["url.dll,FileProtocolHandler", &target]);
+    hide_command_window(&mut command);
+    command
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| anyhow!("unable to open {target}: {error}"))
+}
+
 pub fn reveal_directory(path: &Path) -> Result<()> {
     Command::new("explorer.exe")
         .arg(path)

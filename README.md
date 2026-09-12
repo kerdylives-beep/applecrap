@@ -6,8 +6,8 @@ AppleCrap Alpha is a portable Windows app for taking song requests from Twitch c
 
 ## Download
 
-- ⬇️ [Download AppleCrap Alpha for Windows](https://github.com/kerdylives-beep/applecrap/releases/download/v0.3.8-alpha.1/AppleCrap.Alpha.zip)
-- 📦 Latest portable zip: `v0.3.8-alpha.1`
+- ⬇️ [Download AppleCrap Alpha for Windows](https://github.com/kerdylives-beep/applecrap/releases/download/v0.3.9-alpha.1/AppleCrap.Alpha.zip)
+- 📦 Latest portable zip: `v0.3.9-alpha.1`
 - 🪟 Unzip it, run `AppleCrap Alpha.exe`, and keep the `data` folder beside it.
 
 ## What It Does
@@ -17,6 +17,7 @@ AppleCrap Alpha is a portable Windows app for taking song requests from Twitch c
 - 🧾 Keeps a live queue of requested songs
 - ✅ Lets you approve, remove, or manually review requests
 - 🎧 Queues matched tracks straight into Apple Music as Play Next, so they play automatically and the streamer's playlist resumes once requests run out
+- 📺 Serves a now-playing overlay for OBS (current song, requester, and what is next)
 - 🧰 Exports diagnostics if something goes sideways
 - 💾 Stores data in the portable folder when possible
 
@@ -73,6 +74,18 @@ Portable storage uses `./data` beside the executable. If that folder is not writ
 Your keyboard's **media keys** (play/pause, next, previous) control the player while it has a track loaded — no need to focus the app first. When AppleCrap is not holding a track, the keys go back to your other apps, so they only take over the keys while they are actually the thing playing. You can turn this off from the player section of the dashboard. The current track also shows in the Windows "now playing" popup.
 
 The player window can stay hidden the whole time; while hidden it stops drawing entirely, so it costs almost nothing to leave running beside a game.
+
+## Stream Overlay
+
+AppleCrap serves a now-playing overlay for OBS on your own machine.
+
+1. Open the **Overlay** panel in the app and copy the URL (`http://127.0.0.1:4747/` by default).
+2. In OBS, add a **Browser** source and paste it in. A size of about **560 x 220** fits the card.
+3. That is it — the background is transparent, so it sits straight over your scene.
+
+It shows the current song with its artwork, who requested it, and what is queued up next. It
+fades itself out when nothing is playing, so an idle scene stays clean. The panel can turn the
+"next up" list off, change how many upcoming songs it lists, or move it to another port.
 
 ## Chat Commands
 

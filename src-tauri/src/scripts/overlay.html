@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>AppleCrap Now Playing</title>
+<style>
+  /* Transparent by default: OBS composites this over the scene. */
+  :root {
+    --accent: #ffb74d;
+    --card: rgba(12, 16, 24, 0.82);
+    --text: #f2f6fb;
+    --muted: rgba(216, 228, 242, 0.72);
+    --dim: rgba(186, 202, 219, 0.55);
+    --radius: 16px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    overflow: hidden;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--text);
+  }
+
+  #root {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+    /* Hidden until there is something to show, so an idle scene stays clean. */
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 420ms ease, transform 420ms ease;
+  }
+
+  #root.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    max-width: 520px;
+    padding: 14px;
+    border-radius: var(--radius);
+    background: var(--card);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(14px);
+  }
+
+  .art {
+    width: 84px;
+    height: 84px;
+    flex: 0 0 auto;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    object-fit: cover;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  }
+
+  .art[hidden] { display: none; }
+
+  .meta {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .pulse {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.45; transform: scale(0.8); }
+  }
+
+  .title {
+    font-size: 21px;
+    font-weight: 650;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 400px;
+  }
+
+  .artist {
+    font-size: 15px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 400px;
+  }
+
+  .requester {
+    margin-top: 3px;
+    font-size: 12.5px;
+    color: var(--dim);
+  }
+
+  .requester b {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .requester[hidden] { display: none; }
+
+  .next {
+    max-width: 520px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: rgba(12, 16, 24, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(10px);
+  }
+
+  .next[hidden] { display: none; }
+
+  .next-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 5px;
+  }
+
+  .next-item {
+    font-size: 13px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.5;
+  }
+
+  .next-item span { color: var(--dim); }
+
+  /* Re-trigger on track change so a new song visibly lands. */
+  .bump { animation: bump 520ms ease; }
+
+  @keyframes bump {
+    0% { opacity: 0; transform: translateX(-14px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+</style>
+</head>
+<body>
+  <div id="root">
+    <div class="card" id="card">
+      <img class="art" id="art" alt="" hidden />
+      <div class="meta">
+        <div class="eyebrow"><span class="pulse"></span><span>Now Playing</span></div>
+        <div class="title" id="title"></div>
+        <div class="artist" id="artist"></div>
+        <div class="requester" id="requester" hidden></div>
+      </div>
+    </div>
+    <div class="next" id="next" hidden>
+      <div class="next-label">Next up</div>
+      <div id="next-items"></div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  'use strict'
+
+  const root = document.getElementById('root')
+  const card = document.getElementById('card')
+  const art = document.getElementById('art')
+  const titleEl = document.getElementById('title')
+  const artistEl = document.getElementById('artist')
+  const requesterEl = document.getElementById('requester')
+  const nextEl = document.getElementById('next')
+  const nextItems = document.getElementById('next-items')
+
+  let lastTrackKey = ''
+  let lastPayload = ''
+  let hideTimer = null
+
+  // Fading out the instant a state blip arrives would flicker the overlay on
+  // stream, so hiding waits a beat while showing stays immediate.
+  function setVisible(visible) {
+    if (visible) {
+      if (hideTimer !== null) {
+        clearTimeout(hideTimer)
+        hideTimer = null
+      }
+      root.classList.add('visible')
+      return
+    }
+    if (hideTimer === null && root.classList.contains('visible')) {
+      hideTimer = setTimeout(function () {
+        hideTimer = null
+        root.classList.remove('visible')
+      }, 2500)
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+  }
+
+  function render(state) {
+    const playing = !!state.playing && !!state.title
+    setVisible(playing)
+    if (!playing) {
+      lastTrackKey = ''
+      return
+    }
+
+    const trackKey = state.title + '|' + state.artist
+    if (trackKey !== lastTrackKey) {
+      lastTrackKey = trackKey
+      card.classList.remove('bump')
+      // Force reflow so the animation restarts on every track change.
+      void card.offsetWidth
+      card.classList.add('bump')
+    }
+
+    titleEl.textContent = state.title || ''
+    artistEl.textContent = state.artist || ''
+
+    if (state.artworkUrl) {
+      if (art.getAttribute('src') !== state.artworkUrl) {
+        art.setAttribute('src', state.artworkUrl)
+      }
+      art.hidden = false
+    } else {
+      art.hidden = true
+      art.removeAttribute('src')
+    }
+
+    if (state.requestedBy) {
+      requesterEl.innerHTML = 'requested by <b>' + escapeHtml(state.requestedBy) + '</b>'
+      requesterEl.hidden = false
+    } else {
+      requesterEl.hidden = true
+    }
+
+    const queue = Array.isArray(state.queue) ? state.queue : []
+    if (state.showQueue && queue.length > 0) {
+      nextItems.innerHTML = queue
+        .map(function (item) {
+          const who = item.requestedBy ? ' <span>· ' + escapeHtml(item.requestedBy) + '</span>' : ''
+          const artist = item.artist ? ' <span>— ' + escapeHtml(item.artist) + '</span>' : ''
+          return '<div class="next-item">' + escapeHtml(item.title) + artist + who + '</div>'
+        })
+        .join('')
+      nextEl.hidden = false
+    } else {
+      nextEl.hidden = true
+    }
+  }
+
+  async function poll() {
+    try {
+      const response = await fetch('/state', { cache: 'no-store' })
+      const text = await response.text()
+      // Skip the DOM work entirely when nothing changed.
+      if (text !== lastPayload) {
+        lastPayload = text
+        render(JSON.parse(text))
+      }
+    } catch (_) {
+      // App closed or restarting: keep the last frame and retry.
+    }
+  }
+
+  poll()
+  setInterval(poll, 1000)
+})();
+</script>
+</body>
+</html>

@@ -153,6 +153,19 @@ pub async fn import_legacy_state(
 }
 
 #[tauri::command]
+pub async fn open_overlay_preview(
+    context: State<'_, Arc<AppContext>>,
+) -> Result<crate::models::CommandResult, String> {
+    let port = context.current_settings().await.overlay.port;
+    match crate::services::window_shell::open_overlay_preview(port) {
+        Ok(()) => Ok(crate::models::CommandResult::ok(format!(
+            "Opened the overlay preview at http://127.0.0.1:{port}/"
+        ))),
+        Err(error) => Ok(crate::models::CommandResult::error(error.to_string())),
+    }
+}
+
+#[tauri::command]
 pub async fn check_for_updates(
     context: State<'_, Arc<AppContext>>,
 ) -> Result<crate::models::AppState, String> {

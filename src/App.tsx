@@ -24,6 +24,7 @@ const utilityPanels: Array<{ key: Exclude<PanelKey, 'dashboard'>; label: string 
   { key: 'bot', label: 'Bot' },
   { key: 'rules', label: 'Rules' },
   { key: 'now-playing', label: 'Now Playing' },
+  { key: 'overlay', label: 'Overlay' },
   { key: 'logs', label: 'Logs' },
   { key: 'about', label: 'About' },
   { key: 'debug', label: 'Debug' },
@@ -728,6 +729,91 @@ function App() {
               Mods bypass limits
             </label>
           </div>
+        </ModalShell>
+      ) : null}
+
+      {modalPanel === 'overlay' ? (
+        <ModalShell
+          title="Stream Overlay"
+          eyebrow="OBS browser source"
+          onClose={closeModal}
+          actions={<button className={styles.secondaryButton} onClick={store.saveDraftSettings}>Save overlay</button>}
+        >
+          <div className={styles.noticeStrip}>
+            <span>
+              Add this as a <strong>Browser</strong> source in OBS. It shows the current song, who
+              requested it, and what is queued next. The background is transparent.
+            </span>
+          </div>
+          <div className={styles.metaStrip}>
+            <Pill
+              label="Overlay URL"
+              value={`http://127.0.0.1:${state.settings.overlay.port}/`}
+              tone={state.settings.overlay.enabled ? 'good' : 'warn'}
+            />
+            <Pill label="Status" value={state.settings.overlay.enabled ? 'Serving' : 'Off'} tone={state.settings.overlay.enabled ? 'good' : 'neutral'} />
+          </div>
+          <div className={styles.sectionActionsInline}>
+            <button
+              className={styles.secondaryButton}
+              onClick={() => {
+                void navigator.clipboard
+                  ?.writeText(`http://127.0.0.1:${state.settings.overlay.port}/`)
+                  .catch(() => undefined)
+              }}
+            >
+              Copy URL
+            </button>
+            <button
+              className={styles.ghostButton}
+              onClick={() => {
+                void store.openOverlayPreview()
+              }}
+            >
+              Preview in browser
+            </button>
+          </div>
+          <div className={styles.formGrid}>
+            <label className={styles.actionToggle}>
+              <input
+                type="checkbox"
+                checked={store.settingsDraft.overlay.enabled}
+                onChange={(event) => store.updateDraft('overlay', { enabled: event.target.checked })}
+              />
+              <span>Serve the overlay</span>
+            </label>
+            <label className={styles.actionToggle}>
+              <input
+                type="checkbox"
+                checked={store.settingsDraft.overlay.showQueue}
+                onChange={(event) => store.updateDraft('overlay', { showQueue: event.target.checked })}
+              />
+              <span>Show what is next up</span>
+            </label>
+            <label>
+              Next up count
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={store.settingsDraft.overlay.queueCount}
+                onChange={(event) => store.updateDraft('overlay', { queueCount: Number(event.target.value) })}
+              />
+            </label>
+            <label>
+              Port
+              <input
+                type="number"
+                min={1024}
+                max={65535}
+                value={store.settingsDraft.overlay.port}
+                onChange={(event) => store.updateDraft('overlay', { port: Number(event.target.value) })}
+              />
+            </label>
+          </div>
+          <p className={styles.emptyCopy}>
+            Recommended OBS source size: 560 x 220 (or 560 x 120 with "next up" turned off).
+          </p>
         </ModalShell>
       ) : null}
 

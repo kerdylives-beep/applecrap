@@ -243,6 +243,12 @@
           "markdownDescription": "Enables the install_update command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_overlay_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-overlay-preview",
+          "markdownDescription": "Enables the open_overlay_preview command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_track command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-track",
@@ -391,6 +397,12 @@
           "type": "string",
           "const": "deny-install-update",
           "markdownDescription": "Denies the install_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_overlay_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-overlay-preview",
+          "markdownDescription": "Denies the open_overlay_preview command without any pre-configured scope."
         },
         {
           "description": "Denies the open_track command without any pre-configured scope.",

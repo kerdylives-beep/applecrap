@@ -14,6 +14,7 @@ export type PanelKey =
   | 'bot'
   | 'rules'
   | 'now-playing'
+  | 'overlay'
   | 'logs'
   | 'about'
   | 'debug'
@@ -69,6 +70,12 @@ export type AppSettings = {
     autoQueue: boolean
     audioOutputDevice: string
     mediaKeys: boolean
+  }
+  overlay: {
+    enabled: boolean
+    port: number
+    showQueue: boolean
+    queueCount: number
   }
 }
 

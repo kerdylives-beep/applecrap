@@ -205,6 +205,30 @@
     return String(music.playbackState)
   }
 
+  // MusicKit exposes artwork as a URL template with {w}/{h} placeholders on
+  // some shapes and a plain URL on others; handle both.
+  function artworkUrlOf(item) {
+    try {
+      const template =
+        (item.attributes && item.attributes.artwork && item.attributes.artwork.url) ||
+        (item.artwork && item.artwork.url) ||
+        null
+      if (typeof template === 'string' && template) {
+        return template
+          .replace('{w}', '512')
+          .replace('{h}', '512')
+          .replace('{f}', 'jpg')
+          .replace('{c}', 'bb')
+      }
+      if (typeof item.artworkURL === 'string' && item.artworkURL) {
+        return item.artworkURL
+      }
+    } catch (_) {
+      /* fall through */
+    }
+    return null
+  }
+
   function snapshot() {
     const music = instance()
     if (!music) {
@@ -243,6 +267,7 @@
       itemId: item && item.id ? String(item.id) : null,
       durationMs:
         item && item.playbackDuration ? Math.round(item.playbackDuration * 1000) : null,
+      artworkUrl: item ? artworkUrlOf(item) : null,
       outputDevices: routing.devices,
       currentSink: routing.desired || '',
       sinkError: routing.lastError || null,

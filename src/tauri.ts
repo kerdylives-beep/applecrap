@@ -81,6 +81,10 @@ export async function importLegacyState() {
   return invoke<CommandResult>('import_legacy_state')
 }
 
+export async function openOverlayPreview() {
+  return invoke<CommandResult>('open_overlay_preview')
+}
+
 export async function installUpdate() {
   return invoke<CommandResult>('install_update')
 }

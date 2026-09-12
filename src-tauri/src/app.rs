@@ -14,12 +14,13 @@ use crate::{
     models::{
         compact_log_message, AppState, AppStats, ApproveRequestPayload, BotConnectionState,
         BotStatus, CommandResult, DiagnosticsSnapshot, LegacyImportStatus, LogEntry, LogLevel,
-        OpenTrackPayload, PersistedState, ProbeResult, ProbeSnapshot, QueueHandoffState, QueueItem,
-        ResolutionStatus, SaveSettingsPayload, SearchResult,
+        OpenTrackPayload, OverlayQueueItem, OverlayState, PersistedState, ProbeResult,
+        ProbeSnapshot, QueueHandoffState, QueueItem, ResolutionStatus, SaveSettingsPayload,
+        SearchResult,
     },
     services::{
-        apple_catalog::AppleCatalog, diagnostics, player_bridge::PlayerBridge, queue_engine,
-        settings_store::SettingsStore, twitch_service, updater, window_shell,
+        apple_catalog::AppleCatalog, diagnostics, overlay_server, player_bridge::PlayerBridge,
+        queue_engine, settings_store::SettingsStore, twitch_service, updater, window_shell,
     },
 };
 
@@ -34,6 +35,9 @@ pub struct AppContext {
     persisted: RwLock<PersistedState>,
     runtime: RwLock<RuntimeState>,
     twitch_connection: Mutex<Option<TwitchConnection>>,
+    /// Running overlay server, with the port it was bound to so a settings
+    /// change can tell whether it needs restarting.
+    overlay_task: Mutex<Option<(u16, JoinHandle<()>)>>,
 }
 
 struct TwitchConnection {
@@ -53,6 +57,10 @@ struct RuntimeState {
     auto_handoff_in_flight: bool,
     update: Option<crate::models::UpdateInfo>,
     media_keys_claimed: bool,
+    /// The request whose track is currently playing. Kept because confirming
+    /// playback removes the item from the queue, and the overlay still wants
+    /// to credit whoever asked for it.
+    now_playing_request: Option<QueueItem>,
 }
 
 impl AppContext {
@@ -97,8 +105,10 @@ impl AppContext {
                 auto_handoff_in_flight: false,
                 update: None,
                 media_keys_claimed: false,
+                now_playing_request: None,
             }),
             twitch_connection: Mutex::new(None),
+            overlay_task: Mutex::new(None),
         })
     }
 
@@ -131,6 +141,11 @@ impl AppContext {
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(Duration::from_secs(5)).await;
             let _ = update_context.check_for_updates().await;
+        });
+
+        let overlay_context = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            overlay_context.sync_overlay_server().await;
         });
 
         // Debounced writer for low-stakes state changes (log lines). Queue and
@@ -370,8 +385,97 @@ impl AppContext {
 
         self.save_persisted().await?;
         self.emit_state().await;
+        self.sync_overlay_server().await;
         self.ensure_queue_progress("settings update").await;
         Ok(self.snapshot().await)
+    }
+
+    /// Starts, stops, or rebinds the overlay server to match current settings.
+    pub async fn sync_overlay_server(self: &Arc<Self>) {
+        let settings = self.current_settings().await.overlay;
+        let mut task = self.overlay_task.lock().await;
+
+        let already_correct = matches!(task.as_ref(), Some((port, _)) if *port == settings.port)
+            && settings.enabled;
+        if already_correct {
+            return;
+        }
+
+        if let Some((_, handle)) = task.take() {
+            handle.abort();
+        }
+
+        if !settings.enabled {
+            return;
+        }
+
+        let server_context = Arc::clone(self);
+        let port = settings.port;
+        let handle = tauri::async_runtime::spawn(async move {
+            overlay_server::serve(server_context, port).await;
+        });
+        *task = Some((port, handle));
+    }
+
+    /// Snapshot for the OBS overlay: what is playing, who asked for it, and
+    /// what is queued behind it.
+    pub async fn overlay_state(&self) -> OverlayState {
+        let persisted = self.persisted.read().await;
+        let runtime = self.runtime.read().await;
+        let probe = &runtime.probe;
+        let settings = &persisted.settings.overlay;
+
+        // Paused and loading still count as "there is a current track". Only
+        // strictly-playing would blink the overlay off during every track
+        // change, when the player briefly reports something else.
+        let playing = !probe.title.is_empty()
+            && ["playing", "paused", "loading"]
+                .iter()
+                .any(|state| probe.status.eq_ignore_ascii_case(state));
+
+        // Only credit the stored requester while it still matches what the
+        // player reports, so attribution cannot go stale across tracks.
+        let requested_by = runtime.now_playing_request.as_ref().and_then(|item| {
+            let matches_track = item
+                .track
+                .as_ref()
+                .map(|track| {
+                    queue_engine::normalize_text(&track.title)
+                        == queue_engine::normalize_text(&probe.title)
+                })
+                .unwrap_or(false);
+            (matches_track && playing).then(|| item.requested_by.clone())
+        });
+
+        let queue = persisted
+            .queue
+            .iter()
+            .take(settings.queue_count.clamp(1, 10) as usize)
+            .map(|item| OverlayQueueItem {
+                title: item
+                    .track
+                    .as_ref()
+                    .map(|track| track.title.clone())
+                    .unwrap_or_else(|| item.query.clone()),
+                artist: item
+                    .track
+                    .as_ref()
+                    .map(|track| track.artist_name.clone())
+                    .unwrap_or_default(),
+                requested_by: item.requested_by.clone(),
+            })
+            .collect();
+
+        OverlayState {
+            playing,
+            title: probe.title.clone(),
+            artist: probe.artist.clone(),
+            album: probe.album.clone(),
+            artwork_url: probe.artwork_url.clone(),
+            requested_by,
+            show_queue: settings.show_queue,
+            queue,
+        }
     }
 
     pub async fn connect_bot(self: &Arc<Self>) -> Result<AppState> {
@@ -744,6 +848,10 @@ impl AppContext {
                         ),
                     )
                     .await;
+                    {
+                        let mut runtime = self.runtime.write().await;
+                        runtime.now_playing_request = top_item.clone();
+                    }
                     let _ = self.remove_request(&queue_id).await;
                     self.ensure_queue_progress("playback confirmation").await;
                 }

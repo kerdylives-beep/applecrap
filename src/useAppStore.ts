@@ -11,6 +11,7 @@ import {
   exportDiagnostics,
   importLegacyState,
   installUpdate as installUpdateCommand,
+  openOverlayPreview as openOverlayPreviewCommand,
   removeRequest,
   revealDataFolder,
   saveSettings,
@@ -44,6 +45,12 @@ const defaultSettings: AppSettings = {
     autoQueue: true,
     audioOutputDevice: '',
     mediaKeys: true,
+  },
+  overlay: {
+    enabled: true,
+    port: 4747,
+    showQueue: true,
+    queueCount: 3,
   },
 }
 
@@ -272,6 +279,13 @@ export function useAppStore() {
     }
   }
 
+  const openOverlayPreview = async () => {
+    const result = await runAction('open-overlay-preview', openOverlayPreviewCommand)
+    if (result) {
+      applyResultNotice(result)
+    }
+  }
+
   const startBot = async () => {
     const savedState = await runAction('save-settings', () => saveSettings(settingsDraft))
     if (!savedState) {
@@ -473,6 +487,7 @@ export function useAppStore() {
     setAutoQueueEnabled,
     setAudioOutputDevice,
     setMediaKeysEnabled,
+    openOverlayPreview,
     startBot,
     stopBot,
     submitManualRequest,

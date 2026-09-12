@@ -170,7 +170,8 @@ pub fn run() {
             player_show,
             player_hide,
             check_for_updates,
-            install_update
+            install_update,
+            open_overlay_preview
         ])
         .run(tauri::generate_context!())
         .expect("error while running AppleCrap Alpha");

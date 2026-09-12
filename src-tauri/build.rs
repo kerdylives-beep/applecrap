@@ -30,6 +30,7 @@ fn main() {
             "player_hide",
             "check_for_updates",
             "install_update",
+            "open_overlay_preview",
         ]),
     ))
     .expect("failed to run tauri-build");
