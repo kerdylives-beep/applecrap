@@ -55,6 +55,24 @@ pub fn spawn_session_labeler() {
         .ok();
 }
 
+/// Nudges the process rendering our audio above normal priority. Deliberately
+/// modest: high/realtime classes can starve other work, and the audio service
+/// uses very little CPU — it just needs to be scheduled on time.
+fn raise_audio_priority(pid: u32) {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{
+        OpenProcess, SetPriorityClass, ABOVE_NORMAL_PRIORITY_CLASS, PROCESS_SET_INFORMATION,
+    };
+
+    unsafe {
+        let Ok(handle) = OpenProcess(PROCESS_SET_INFORMATION, false, pid) else {
+            return;
+        };
+        let _ = SetPriorityClass(handle, ABOVE_NORMAL_PRIORITY_CLASS);
+        let _ = CloseHandle(handle);
+    }
+}
+
 /// Remembers verdicts per pid so the expensive process-tree walk only runs for
 /// pids we have never judged before.
 #[derive(Default)]
@@ -117,6 +135,13 @@ fn relabel_descendant_sessions(
                     };
                     if has_ancestor_named(map, session_pid, exe_name) {
                         cache.ours.insert(session_pid);
+                        // A session owned by us means this is the process
+                        // actually rendering audio (Chromium's audio service).
+                        // Give it a little headroom so a busy CPU — a game on
+                        // the same machine — cannot starve the audio thread
+                        // into buffer underruns, which is what makes playback
+                        // crackle.
+                        raise_audio_priority(session_pid);
                     } else {
                         cache.not_ours.insert(session_pid);
                         continue;

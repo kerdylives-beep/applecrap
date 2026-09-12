@@ -70,7 +70,11 @@
       return
     }
     try {
-      const context = new AudioContext()
+      // 'playback' requests the largest output buffer the platform offers.
+      // This stream only has to exist, never to be low latency, and a big
+      // buffer is far more tolerant of the CPU being busy with a game — small
+      // buffers are what turn CPU spikes into crackling.
+      const context = new AudioContext({ latencyHint: 'playback' })
       const oscillator = context.createOscillator()
       const gain = context.createGain()
       // Not exactly zero: Chromium suspends output streams that render pure
@@ -94,27 +98,52 @@
   // The desired sink is pushed from the app settings. It is applied to every
   // current and future media element (and the keepalive context) so the
   // player's audio can be pointed at e.g. a Wave Link virtual device.
-  const routing = { desired: '', devices: [], lastError: '' }
+  const routing = { desired: '', devices: [], lastError: '', failedTarget: null }
+
+  // Switching a sink tears down and rebuilds the underlying output stream, so
+  // every one of these calls must be conditional. Re-applying a sink that is
+  // already in place is what made playback crackle.
+  let keepaliveSinkPending = false
 
   function applySinkTo(element) {
     if (!element || typeof element.setSinkId !== 'function') {
       return
     }
     const target = routing.desired || ''
-    if ((element.sinkId || '') === target) {
+    if ((element.sinkId || '') === target || routing.failedTarget === target) {
       return
     }
     element.setSinkId(target).catch((error) => {
       routing.lastError = String((error && error.message) || error)
+      // Stop hammering a device that will not accept us until the target
+      // changes; retrying every sweep would restart the stream endlessly.
+      routing.failedTarget = target
     })
+  }
+
+  function applyKeepaliveSink() {
+    if (!keepalive || typeof keepalive.setSinkId !== 'function' || keepaliveSinkPending) {
+      return
+    }
+    const target = routing.desired || ''
+    const current = typeof keepalive.sinkId === 'string' ? keepalive.sinkId : ''
+    if (current === target || routing.failedTarget === target) {
+      return
+    }
+    keepaliveSinkPending = true
+    Promise.resolve(keepalive.setSinkId(target))
+      .catch((error) => {
+        routing.lastError = String((error && error.message) || error)
+        routing.failedTarget = target
+      })
+      .then(() => {
+        keepaliveSinkPending = false
+      })
   }
 
   function applySinkEverywhere() {
     document.querySelectorAll('audio, video').forEach(applySinkTo)
-    if (keepalive && typeof keepalive.setSinkId === 'function') {
-      const target = routing.desired || ''
-      keepalive.setSinkId(target === '' ? '' : target).catch(() => {})
-    }
+    applyKeepaliveSink()
   }
 
   async function refreshOutputDevices() {
@@ -134,21 +163,13 @@
   // Initialization scripts run before the document exists, so the observer
   // must attach lazily (a top-level observe(null) would kill this whole IIFE).
   let observerAttached = false
-  let sinkSweepScheduled = false
+  let mediaMaybeChanged = true
 
-  // music.apple.com mutates its DOM constantly (progress bar, scrollers), and
-  // a full-document querySelectorAll per mutation was burning CPU for nothing.
-  // Only react when element nodes are actually added, and coalesce bursts into
-  // a single sweep.
+  // music.apple.com mutates its DOM constantly (progress bar, scrollers). The
+  // observer only raises a flag; the regular tick decides when to act, so DOM
+  // churn can never drive the sweep rate.
   function scheduleSinkSweep() {
-    if (sinkSweepScheduled) {
-      return
-    }
-    sinkSweepScheduled = true
-    setTimeout(() => {
-      sinkSweepScheduled = false
-      applySinkEverywhere()
-    }, 400)
+    mediaMaybeChanged = true
   }
 
   function attachSinkObserver() {
@@ -349,9 +370,10 @@
     attachSinkObserver()
     startKeepalive()
     attachEvents()
-    // The observer catches new media elements; this is just a periodic safety
-    // net, so it does not need to run every tick.
-    if (tick % 5 === 0) {
+    // Sweep when new media elements may have appeared, and as a slow safety
+    // net otherwise. Each sweep is idempotent, so this cannot disturb audio.
+    if (mediaMaybeChanged || tick % 15 === 0) {
+      mediaMaybeChanged = false
       applySinkEverywhere()
     }
     if (tick % 15 === 1) {
