@@ -124,6 +124,7 @@ export type ProbeSnapshot = {
   updatedAt: string | null
   outputDevices: AudioOutputDevice[]
   currentOutput: string
+  bitrate: number | null
 }
 
 export type DiagnosticsSnapshot = {

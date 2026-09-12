@@ -315,6 +315,7 @@ impl ProbeSnapshot {
             && self.sessions == other.sessions
             && self.output_devices == other.output_devices
             && self.current_output == other.current_output
+            && self.bitrate == other.bitrate
     }
 }
 
@@ -340,6 +341,10 @@ pub struct ProbeSnapshot {
     pub current_output: String,
     #[serde(default)]
     pub artwork_url: Option<String>,
+    /// Playback bitrate the web player reports, in kbps. Its ceiling is 256
+    /// (AAC); lossless is only available in Apple's native apps.
+    #[serde(default)]
+    pub bitrate: Option<i64>,
 }
 
 impl Default for ProbeSnapshot {
@@ -361,6 +366,7 @@ impl Default for ProbeSnapshot {
             output_devices: Vec::new(),
             current_output: String::new(),
             artwork_url: None,
+            bitrate: None,
         }
     }
 }

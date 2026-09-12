@@ -824,6 +824,11 @@ function App() {
             <Pill label="App" value={state.probe.appId || 'Unknown'} />
             <Pill label="Status" value={state.probe.status || 'Stopped'} tone={state.probe.matched ? 'good' : 'neutral'} />
             <Pill label="Confidence" value={`${Math.round(state.probe.confidence * 100)}%`} />
+            <Pill
+              label="Quality"
+              value={state.probe.bitrate ? `${state.probe.bitrate} kbps AAC` : 'Unknown'}
+              tone={state.probe.bitrate && state.probe.bitrate >= 256 ? 'good' : 'neutral'}
+            />
           </div>
           <div className={styles.noteBox}>
             <strong>Match breakdown</strong>

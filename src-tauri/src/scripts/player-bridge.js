@@ -192,6 +192,22 @@
     }
   }
 
+  // The web player tops out at 256 kbps AAC (PlaybackBitrate.HIGH); lossless
+  // and Spatial Audio are native-app only. All we can do is make sure we are
+  // never left on STANDARD (64 kbps). Guarded: assigning unconditionally is
+  // the kind of thing that restarts the audio pipeline for no reason.
+  function ensureHighBitrate(music) {
+    try {
+      const rates = window.MusicKit && window.MusicKit.PlaybackBitrate
+      const high = rates && rates.HIGH
+      if (typeof high === 'number' && music.bitrate !== high) {
+        music.bitrate = high
+      }
+    } catch (_) {
+      /* not fatal; playback just stays at whatever Apple chose */
+    }
+  }
+
   function playbackStateName(music) {
     try {
       const mk = window.MusicKit
@@ -268,6 +284,7 @@
       durationMs:
         item && item.playbackDuration ? Math.round(item.playbackDuration * 1000) : null,
       artworkUrl: item ? artworkUrlOf(item) : null,
+      bitrate: typeof music.bitrate === 'number' ? music.bitrate : null,
       outputDevices: routing.devices,
       currentSink: routing.desired || '',
       sinkError: routing.lastError || null,
@@ -395,6 +412,10 @@
     attachSinkObserver()
     startKeepalive()
     attachEvents()
+    const music = instance()
+    if (music) {
+      ensureHighBitrate(music)
+    }
     // Sweep when new media elements may have appeared, and as a slow safety
     // net otherwise. Each sweep is idempotent, so this cannot disturb audio.
     if (mediaMaybeChanged || tick % 15 === 0) {

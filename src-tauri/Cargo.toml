@@ -1,6 +1,6 @@
 [package]
 name = "applecrap_alpha"
-version = "0.3.9-alpha.1"
+version = "0.3.10-alpha.1"
 description = "Portable AppleCrap Alpha rewrite"
 authors = ["KerdyLives"]
 edition = "2021"
