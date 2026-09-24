@@ -285,8 +285,15 @@
         typeof music.currentPlaybackTime === 'number'
           ? Math.round(music.currentPlaybackTime * 1000)
           : null,
+      // Mind the units: MusicKit reports the player's position and
+      // currentPlaybackDuration in seconds, but an item's playbackDuration is
+      // already in milliseconds.
       durationMs:
-        item && item.playbackDuration ? Math.round(item.playbackDuration * 1000) : null,
+        typeof music.currentPlaybackDuration === 'number' && music.currentPlaybackDuration > 0
+          ? Math.round(music.currentPlaybackDuration * 1000)
+          : item && item.playbackDuration
+            ? Math.round(item.playbackDuration)
+            : null,
       artworkUrl: item ? artworkUrlOf(item) : null,
       bitrate: typeof music.bitrate === 'number' ? music.bitrate : null,
       outputDevices: routing.devices,

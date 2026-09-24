@@ -34,6 +34,8 @@ pub fn set_player_rendering(window: &tauri::WebviewWindow, rendering: bool) {
     let _ = (window, rendering);
 }
 
+/// Longest track length believed from the player (six hours).
+const MAX_PLAUSIBLE_TRACK_MS: i64 = 6 * 60 * 60 * 1000;
 /// How old a bridge status may be before we consider the player disconnected.
 const STATUS_STALE_AFTER: Duration = Duration::from_secs(8);
 /// How long a dispatched command may wait for the player to answer.
@@ -272,7 +274,11 @@ impl PlayerBridge {
         snapshot.output_devices = status.output_devices.clone();
         snapshot.current_output = status.current_sink.clone();
         snapshot.artwork_url = status.artwork_url.clone();
-        snapshot.duration_ms = status.duration_ms;
+        // A length over six hours means a unit mix-up, not a real song:
+        // better no progress bar than a wrong one.
+        snapshot.duration_ms = status
+            .duration_ms
+            .filter(|ms| *ms > 0 && *ms < MAX_PLAUSIBLE_TRACK_MS);
         snapshot.position_ms = status.position_ms;
         snapshot.bitrate = status.bitrate;
         if let Some(sink_error) = status.sink_error.as_ref().filter(|e| !e.is_empty()) {
