@@ -38,6 +38,7 @@ use crate::{
 
 mod auth;
 mod channel_points;
+mod health;
 mod maintenance;
 mod overlay;
 mod playback;
@@ -78,6 +79,8 @@ pub struct AppContext {
     channel_points_retry: Mutex<Option<JoinHandle<()>>>,
     /// Recently handled redemption ids (see `first_sighting`).
     seen_redemptions: std::sync::Mutex<std::collections::VecDeque<String>>,
+    /// Wakes the Apple Music search health check early.
+    apple_health_nudge: tokio::sync::Notify,
 }
 
 struct TwitchConnection {
@@ -106,6 +109,7 @@ struct RuntimeState {
     auth_error: Option<String>,
     channel_points_status: crate::models::ChannelPointsStatus,
     alerts: Vec<crate::models::Alert>,
+    player_loading_since: Option<std::time::Instant>,
 }
 
 impl AppContext {
@@ -180,6 +184,7 @@ impl AppContext {
                 auth_error: None,
                 channel_points_status: Default::default(),
                 alerts,
+                player_loading_since: None,
             }),
             twitch_connection: Mutex::new(None),
             overlay_task: Mutex::new(None),
@@ -189,6 +194,7 @@ impl AppContext {
             channel_points_listener: Mutex::new(None),
             channel_points_retry: Mutex::new(None),
             seen_redemptions: std::sync::Mutex::new(Default::default()),
+            apple_health_nudge: tokio::sync::Notify::new(),
         })
     }
 
@@ -234,6 +240,8 @@ impl AppContext {
                 }
             }
         });
+
+        tauri::async_runtime::spawn(Arc::clone(self).watch_apple_search());
 
         let update_context = Arc::clone(self);
         tauri::async_runtime::spawn(async move {

@@ -68,6 +68,7 @@ impl AppContext {
                     format!("Apple Music lookup failed for \"{query}\": {error}"),
                 )
                 .await;
+                self.nudge_apple_health();
             }
         }
 

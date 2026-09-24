@@ -23,6 +23,7 @@ impl AppContext {
             .await;
         self.set_probe_snapshot(snapshot.clone(), session_signature)
             .await;
+        self.note_player_status(&snapshot.status).await;
 
         #[cfg(desktop)]
         self.sync_media_key_claim(&snapshot).await;
