@@ -35,6 +35,10 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      # The Windows build embeds the icons, which are generated, not committed.
+      - name: Generate icons
+        run: npm run build:icons
+
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
