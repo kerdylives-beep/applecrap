@@ -6,6 +6,7 @@ pub mod irc;
 pub mod overlay_server;
 pub mod player_bridge;
 pub mod queue_engine;
+pub mod secret_store;
 pub mod settings_store;
 pub mod twitch_service;
 pub mod updater;

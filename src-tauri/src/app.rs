@@ -35,6 +35,8 @@ pub struct AppContext {
     /// Set when persisted state has unwritten changes awaiting the debounced
     /// flush (see `mark_persist_dirty`).
     pending_persist: AtomicBool,
+    /// Serializes state saves (see `save_persisted`).
+    save_lock: Mutex<()>,
     apple_catalog: AppleCatalog,
     persisted: RwLock<PersistedState>,
     runtime: RwLock<RuntimeState>,
@@ -98,6 +100,7 @@ impl AppContext {
             handle,
             player_bridge: PlayerBridge::new(),
             pending_persist: AtomicBool::new(false),
+            save_lock: Mutex::new(()),
             apple_catalog: AppleCatalog::new(http.clone()),
             http,
             storage,
@@ -224,7 +227,7 @@ impl AppContext {
         .await;
 
         let client = self.http.clone();
-        let staged = match updater::download_and_stage(&client, &update.asset_url).await
+        let staged = match updater::download_and_stage(&client, &update).await
         {
             Ok(staged) => staged,
             Err(error) => {
@@ -345,9 +348,19 @@ impl AppContext {
     }
 
     pub async fn save_persisted(&self) -> Result<()> {
-        let state = self.persisted.read().await.clone();
+        // One save at a time, so a slower write of an older snapshot can never
+        // land after a newer one.
+        let _write_turn = self.save_lock.lock().await;
+        // Clear the flag before taking the snapshot: a change that races in
+        // afterwards re-marks it and is picked up by the next flush, instead
+        // of being cleared without ever being written.
         self.pending_persist.store(false, Ordering::Relaxed);
-        self.storage.save_persisted_state(&state)
+        let state = self.persisted.read().await.clone();
+        let target = self.storage.state_target();
+        // File I/O off the async runtime; saves include an fsync.
+        tokio::task::spawn_blocking(move || target.save(&state))
+            .await
+            .map_err(|error| anyhow!("save task failed: {error}"))?
     }
 
     /// Queue a state write for the background flusher. Used for low-stakes,
@@ -383,16 +396,12 @@ impl AppContext {
     }
 
     pub async fn save_settings(self: &Arc<Self>, payload: SaveSettingsPayload) -> Result<AppState> {
-        let next_settings = {
-            let persisted = self.persisted.read().await;
-            let mut next = persisted.settings.clone();
-            next.merge_patch(payload);
-            next
-        };
-
         {
+            // Merge under the write lock. Reading, merging, then writing in a
+            // separate step let two quick changes (say, two toggles flipped in
+            // a row) both start from the same copy, and one of them was lost.
             let mut persisted = self.persisted.write().await;
-            persisted.settings = next_settings;
+            persisted.settings.merge_patch(payload);
         }
 
         self.save_persisted().await?;

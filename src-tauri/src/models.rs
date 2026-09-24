@@ -435,6 +435,10 @@ pub struct UpdateInfo {
     pub version: String,
     pub release_url: String,
     pub asset_url: String,
+    /// Detached signature for the zip. Releases without one are offered as a
+    /// manual download only.
+    #[serde(default)]
+    pub signature_url: Option<String>,
 }
 
 #[derive(Clone, Deserialize, Debug, Default)]

@@ -2,14 +2,18 @@ use std::{
     env, fs,
     io::Write,
     path::{Path, PathBuf},
+    sync::Mutex,
 };
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
-use crate::models::{
-    compact_log_message, AppSettings, LegacyImportStatus, LogEntry, PersistedState,
-    QueueHandoffState, QueueItem, StorageInfo, StorageMode, TrackMatch,
+use crate::{
+    models::{
+        compact_log_message, AppSettings, LegacyImportStatus, LogEntry, PersistedState,
+        QueueHandoffState, QueueItem, StorageInfo, StorageMode, TrackMatch,
+    },
+    services::secret_store,
 };
 
 pub struct SettingsStore {
@@ -18,6 +22,35 @@ pub struct SettingsStore {
     pub diagnostics_dir: PathBuf,
     pub runtime_log_file: PathBuf,
     pub storage: StorageInfo,
+    log_handle: Mutex<Option<fs::File>>,
+}
+
+/// Where persisted state lives, detached from the store so a save can move
+/// onto a blocking thread.
+pub struct StateTarget {
+    data_dir: PathBuf,
+    state_file: PathBuf,
+}
+
+impl StateTarget {
+    /// Writes state atomically: a temp file is written and flushed to disk,
+    /// then renamed over the real file (an atomic replace on NTFS). A crash
+    /// mid-save leaves either the old file or the new one — never a truncated
+    /// mix, which previously wiped every setting on the next launch.
+    pub fn save(&self, state: &PersistedState) -> Result<()> {
+        fs::create_dir_all(&self.data_dir)?;
+        let mut on_disk = state.clone();
+        protect_secrets(&mut on_disk);
+        let bytes = serde_json::to_vec_pretty(&on_disk)?;
+        let temp = self.state_file.with_extension("json.tmp");
+        {
+            let mut file = fs::File::create(&temp)?;
+            file.write_all(&bytes)?;
+            file.sync_all()?;
+        }
+        fs::rename(&temp, &self.state_file)?;
+        Ok(())
+    }
 }
 
 impl SettingsStore {
@@ -45,7 +78,7 @@ impl SettingsStore {
         let diagnostics_dir = data_dir.join("diagnostics");
         fs::create_dir_all(&diagnostics_dir)?;
 
-        Ok(Self {
+        let store = Self {
             state_file: data_dir.join("state.json"),
             runtime_log_file: diagnostics_dir.join("runtime.log"),
             storage: StorageInfo {
@@ -55,7 +88,10 @@ impl SettingsStore {
             },
             data_dir,
             diagnostics_dir,
-        })
+            log_handle: Mutex::new(None),
+        };
+        store.rotate_runtime_log();
+        Ok(store)
     }
 
     fn backup_file(&self) -> PathBuf {
@@ -74,9 +110,14 @@ impl SettingsStore {
             return PersistedState::default();
         }
 
-        if let Some(state) = read_state_file(&self.state_file) {
+        if let Some((state, secrets_readable)) = read_state_file(&self.state_file) {
             // Known-good: refresh the backup used for recovery next time.
             let _ = fs::copy(&self.state_file, self.backup_file());
+            if !secrets_readable {
+                self.add_warning(
+                    "Your saved Twitch sign-in could not be read on this Windows account (the folder may have been moved to another PC). Please sign in again.",
+                );
+            }
             return state;
         }
 
@@ -90,7 +131,7 @@ impl SettingsStore {
         };
 
         let (state, message) = match read_state_file(&self.backup_file()) {
-            Some(state) => (
+            Some((state, _)) => (
                 state,
                 format!("Your settings file was damaged, so AppleCrap restored the last good backup.{preserved_note}"),
             ),
@@ -100,38 +141,67 @@ impl SettingsStore {
             ),
         };
 
-        self.storage.warning = Some(match self.storage.warning.take() {
-            Some(existing) => format!("{existing} {message}"),
-            None => message,
-        });
+        self.add_warning(&message);
         state
     }
 
-    /// Writes state atomically: a temp file is written and flushed to disk,
-    /// then renamed over the real file (an atomic replace on NTFS). A crash
-    /// mid-save leaves either the old file or the new one — never a truncated
-    /// mix, which previously wiped every setting on the next launch.
-    pub fn save_persisted_state(&self, state: &PersistedState) -> Result<()> {
-        fs::create_dir_all(&self.data_dir)?;
-        let bytes = serde_json::to_vec_pretty(state)?;
-        let temp = self.state_file.with_extension("json.tmp");
-        {
-            let mut file = fs::File::create(&temp)?;
-            file.write_all(&bytes)?;
-            file.sync_all()?;
-        }
-        fs::rename(&temp, &self.state_file)?;
-        Ok(())
+    fn add_warning(&mut self, message: &str) {
+        self.storage.warning = Some(match self.storage.warning.take() {
+            Some(existing) => format!("{existing} {message}"),
+            None => message.to_string(),
+        });
     }
 
+    pub fn save_persisted_state(&self, state: &PersistedState) -> Result<()> {
+        self.state_target().save(state)
+    }
+
+    /// An owned handle to where state is saved, so a save can run on a
+    /// blocking thread instead of stalling the async runtime.
+    pub fn state_target(&self) -> StateTarget {
+        StateTarget {
+            data_dir: self.data_dir.clone(),
+            state_file: self.state_file.clone(),
+        }
+    }
+
+    /// Appends one line to runtime.log. The file handle is opened once and
+    /// kept: opening a file per line is slow on Windows (antivirus scans every
+    /// open) and this runs for every log entry.
     pub fn append_runtime_log(&self, line: &str) -> Result<()> {
-        fs::create_dir_all(&self.diagnostics_dir)?;
-        let mut file = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.runtime_log_file)?;
-        writeln!(file, "{line}")?;
-        Ok(())
+        let mut handle = self
+            .log_handle
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if handle.is_none() {
+            fs::create_dir_all(&self.diagnostics_dir)?;
+            *handle = Some(
+                fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&self.runtime_log_file)?,
+            );
+        }
+        let result = writeln!(handle.as_mut().expect("opened above"), "{line}");
+        if result.is_err() {
+            // Reopen on the next line rather than failing forever.
+            *handle = None;
+        }
+        Ok(result?)
+    }
+
+    /// Keeps runtime.log bounded. It is appended to for as long as the app
+    /// runs and was never trimmed, so it grew without limit across streams.
+    fn rotate_runtime_log(&self) {
+        const MAX_LOG_BYTES: u64 = 5 * 1024 * 1024;
+        let too_big = fs::metadata(&self.runtime_log_file)
+            .map(|meta| meta.len() > MAX_LOG_BYTES)
+            .unwrap_or(false);
+        if too_big {
+            let previous = self.runtime_log_file.with_extension("log.1");
+            let _ = fs::remove_file(&previous);
+            let _ = fs::rename(&self.runtime_log_file, previous);
+        }
     }
 
     pub fn detect_legacy_import(&self) -> LegacyImportStatus {
@@ -191,12 +261,36 @@ impl SettingsStore {
 }
 
 /// Parses a state file, returning `None` if it is missing or unreadable.
-fn read_state_file(path: &Path) -> Option<PersistedState> {
+/// The flag reports whether every saved credential could be decrypted.
+fn read_state_file(path: &Path) -> Option<(PersistedState, bool)> {
     let contents = fs::read_to_string(path).ok()?;
     let mut state = serde_json::from_str::<PersistedState>(&contents).ok()?;
+    let secrets_readable = reveal_secrets(&mut state);
     state.settings.normalize();
     state.logs = sanitize_logs(state.logs, 120);
-    Some(state)
+    Some((state, secrets_readable))
+}
+
+/// The single list of credential fields encrypted at rest. Anything that
+/// stores a token must be added here and in `reveal_secrets`.
+fn protect_secrets(state: &mut PersistedState) {
+    let token = &mut state.settings.twitch.oauth_token;
+    *token = secret_store::protect(token);
+}
+
+/// Decrypts credential fields in place. A field that cannot be decrypted is
+/// cleared (the user signs in again) and reported via the return value.
+fn reveal_secrets(state: &mut PersistedState) -> bool {
+    let mut all_readable = true;
+    let token = &mut state.settings.twitch.oauth_token;
+    match secret_store::unprotect(token) {
+        Ok(plain) => *token = plain,
+        Err(_) => {
+            token.clear();
+            all_readable = false;
+        }
+    }
+    all_readable
 }
 
 fn sanitize_logs(logs: Vec<LogEntry>, max_entries: usize) -> Vec<LogEntry> {
@@ -423,6 +517,7 @@ mod tests {
             diagnostics_dir: dir.clone(),
             storage: StorageInfo::default(),
             data_dir: dir,
+            log_handle: Mutex::new(None),
         }
     }
 
@@ -463,6 +558,21 @@ mod tests {
             .filter_map(|entry| entry.ok())
             .any(|entry| entry.file_name().to_string_lossy().starts_with("state.corrupt-"));
         assert!(preserved, "damaged file must be kept for manual recovery");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn token_is_encrypted_on_disk_and_restored_on_load() {
+        let mut store = temp_store("secrets");
+        let mut state = configured_state();
+        state.settings.twitch.oauth_token = "oauth:supersecret".to_string();
+        store.save_persisted_state(&state).unwrap();
+
+        let raw = fs::read_to_string(&store.state_file).unwrap();
+        assert!(!raw.contains("supersecret"), "token must not be stored in plain text");
+
+        let loaded = store.load_persisted_state();
+        assert_eq!(loaded.settings.twitch.oauth_token, "oauth:supersecret");
     }
 
     #[test]

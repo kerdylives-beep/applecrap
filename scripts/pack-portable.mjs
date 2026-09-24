@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process'
+import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -28,6 +30,40 @@ await fs.writeFile(path.join(portableDir, 'README.txt'), buildPortableReadme(), 
 
 await compressDirectory(portableDir, portableZip)
 console.log(`Portable alpha created:\n- ${portableDir}\n- ${portableZip}`)
+await signRelease(portableZip)
+
+/**
+ * Writes `<zip>.sig`: a base64 ed25519 signature over the zip. The in-app
+ * updater refuses any release whose zip does not verify against the public
+ * key built into the app, so a release uploaded without this file can only
+ * be installed by hand.
+ *
+ * The private key lives outside the repository (APPLECRAP_SIGNING_KEY, or
+ * ~/.applecrap/release-signing-key.pem). Losing it means installed copies
+ * cannot auto-update to anything signed with a new key.
+ */
+async function signRelease(zipPath) {
+  const signaturePath = `${zipPath}.sig`
+  // Never leave a signature from a previous build next to a new zip.
+  await fs.rm(signaturePath, { force: true })
+
+  const keyPath =
+    process.env.APPLECRAP_SIGNING_KEY || path.join(os.homedir(), '.applecrap', 'release-signing-key.pem')
+  let keyPem
+  try {
+    keyPem = await fs.readFile(keyPath)
+  } catch {
+    console.warn(
+      `\n*** UNSIGNED BUILD: no signing key at ${keyPath}.\n` +
+        '*** The in-app updater will not install this release automatically.\n',
+    )
+    return
+  }
+
+  const signature = crypto.sign(null, await fs.readFile(zipPath), crypto.createPrivateKey(keyPem))
+  await fs.writeFile(signaturePath, signature.toString('base64'), 'utf8')
+  console.log(`- ${signaturePath} (signed)`)
+}
 
 function buildPortableReadme() {
   return [
