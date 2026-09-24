@@ -77,10 +77,41 @@ impl AppleCatalog {
     ) -> Result<Vec<TrackMatch>> {
         let mut matches = self.fetch_itunes_tracks(query, settings).await?;
         if matches.is_empty() {
-            matches = self.fetch_web_search_tracks(query, settings).await?;
+            let mut web = self.fetch_web_search_tracks(query, settings).await?;
+            if let Some(first) = web.first_mut() {
+                self.fill_in_details(first, settings).await;
+            }
+            return Ok(web);
+        }
+
+        // The search API sometimes leaves the original out entirely (seen
+        // with explicit tracks) and returns only covers of it. When the
+        // request names an artist and the best pick isn't theirs, ask the
+        // Apple Music site search, which does list the original.
+        if !is_confident(query, &matches) {
+            let web = self
+                .fetch_web_search_tracks(query, settings)
+                .await
+                .unwrap_or_default();
+            if let Some(mut original) = web
+                .into_iter()
+                .find(|track| artist_named_in(query, &track.artist_name))
+            {
+                self.fill_in_details(&mut original, settings).await;
+                matches.retain(|track| track.id != original.id);
+                matches.insert(0, original);
+            }
         }
 
         Ok(matches)
+    }
+
+    /// Site search results carry no album, artwork or length; the lookup
+    /// API has them.
+    async fn fill_in_details(&self, track: &mut TrackMatch, settings: &AppleMusicSettings) {
+        if let Ok(Some(full)) = self.lookup_track_by_id(&track.id, settings).await {
+            *track = full;
+        }
     }
 
     async fn fetch_itunes_tracks(
@@ -332,6 +363,38 @@ fn imitation_penalty(query_normalized: &str, title: &str, artist: &str, album: &
     }
 }
 
+/// Words that mark a cover wherever they appear as a whole word (unlike
+/// "cover" inside "Undercover").
+const COVER_WORDS: &[&str] = &["cover", "covers", "tribute"];
+
+fn is_cover(title: &str, artist: &str, album: &str) -> bool {
+    [title, artist, album].iter().any(|field| {
+        field
+            .split_whitespace()
+            .any(|word| COVER_WORDS.contains(&word))
+    })
+}
+
+/// Whether the request names this artist ("redbone childish gambino" names
+/// Childish Gambino).
+fn artist_named_in(query: &str, artist: &str) -> bool {
+    let query = strip_featuring(&normalize_text(query));
+    let artist = normalize_text(artist);
+    !artist.is_empty() && format!(" {query} ").contains(&format!(" {artist} "))
+}
+
+/// False when the request names an artist (as one of the candidates'
+/// artists) but the best pick is someone else's recording.
+fn is_confident(query: &str, ranked: &[TrackMatch]) -> bool {
+    let Some(best) = ranked.first() else {
+        return false;
+    };
+    let named = ranked
+        .iter()
+        .any(|track| artist_named_in(query, &track.artist_name));
+    !named || artist_named_in(query, &best.artist_name)
+}
+
 fn score_track(query: &str, song: &ItunesSong) -> i32 {
     let query_normalized = strip_featuring(&normalize_text(query));
     let title = strip_featuring(&normalize_text(
@@ -340,6 +403,12 @@ fn score_track(query: &str, song: &ItunesSong) -> i32 {
     let artist = normalize_text(song.artist_name.as_deref().unwrap_or_default());
     let album = normalize_text(song.collection_name.as_deref().unwrap_or_default());
     let mut score = imitation_penalty(&query_normalized, &title, &artist, &album);
+    let wants_cover = COVER_WORDS
+        .iter()
+        .any(|word| query_normalized.split_whitespace().any(|token| token == *word));
+    if score == 0 && !wants_cover && is_cover(&title, &artist, &album) {
+        score -= 600;
+    }
 
     if title == query_normalized {
         // A title that swallows the entire query while the artist shares no
@@ -464,6 +533,59 @@ fn parse_song_aria_label(value: &str) -> Option<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn itunes(title: &str, artist: &str, album: &str) -> ItunesSong {
+        ItunesSong {
+            wrapper_type: Some("track".to_string()),
+            kind: Some("song".to_string()),
+            track_name: Some(title.to_string()),
+            artist_name: Some(artist.to_string()),
+            collection_name: Some(album.to_string()),
+            ..Default::default()
+        }
+    }
+
+    fn matched(id: &str, title: &str, artist: &str) -> TrackMatch {
+        TrackMatch {
+            id: id.to_string(),
+            title: title.to_string(),
+            artist_name: artist.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn covers_named_in_the_album_are_marked_down() {
+        let query = "redbone childish gambino";
+        let cover = itunes("Redbone", "Smooth Jazz All Stars", "Smooth Jazz All Stars Cover Childish Gambino");
+        let piano = itunes("Redbone (Piano Arrangement)", "The Theorist", "Piano Covers, Vol. 8");
+        let real = itunes("Redbone", "Childish Gambino", "\"Awaken, My Love!\"");
+        assert!(score_track(query, &cover) < 0);
+        assert!(score_track(query, &piano) < 0);
+        assert!(score_track(query, &real) > 300);
+        // Asking for a cover still finds one.
+        assert!(score_track("redbone smooth jazz cover", &cover) > 0);
+        // "Cover" inside a word isn't a cover.
+        assert!(!is_cover("undercover", "kid cudi", "man on the moon"));
+    }
+
+    #[test]
+    fn a_named_artist_that_isnt_the_pick_triggers_a_second_look() {
+        let query = "Redbone Childish Gambino";
+        let ranked = vec![
+            matched("1", "Redbone", "Lofi Fruits Music"),
+            matched("2", "Me and Your Mama", "Childish Gambino"),
+        ];
+        assert!(!is_confident(query, &ranked));
+
+        let good = vec![matched("3", "Redbone", "Childish Gambino")];
+        assert!(is_confident(query, &good));
+
+        // No artist named: nothing to check against.
+        assert!(is_confident("redbone", &[matched("1", "Redbone", "Lofi Fruits Music")]));
+        // Artists match on whole words only.
+        assert!(!artist_named_in("human nature michael jackson", "Jackson 5"));
+    }
 
     #[test]
     fn score_prefers_exact_title_artist() {
