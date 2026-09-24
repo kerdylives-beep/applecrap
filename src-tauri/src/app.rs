@@ -28,6 +28,10 @@ pub struct AppContext {
     pub handle: AppHandle,
     pub storage: SettingsStore,
     pub player_bridge: PlayerBridge,
+    /// One shared HTTP client for every outbound call. It carries the
+    /// connect and request timeouts; reqwest's default has none, so a single
+    /// stuck request could hang whatever was waiting on it indefinitely.
+    pub http: reqwest::Client,
     /// Set when persisted state has unwritten changes awaiting the debounced
     /// flush (see `mark_persist_dirty`).
     pending_persist: AtomicBool,
@@ -41,7 +45,8 @@ pub struct AppContext {
 }
 
 struct TwitchConnection {
-    writer: mpsc::UnboundedSender<String>,
+    id: u64,
+    writer: mpsc::UnboundedSender<twitch_service::Outbound>,
     task: JoinHandle<()>,
 }
 
@@ -83,11 +88,18 @@ impl AppContext {
             LegacyImportStatus::default()
         };
 
+        let http = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(20))
+            .user_agent(concat!("AppleCrap/", env!("CARGO_PKG_VERSION")))
+            .build()?;
+
         Ok(Self {
             handle,
             player_bridge: PlayerBridge::new(),
             pending_persist: AtomicBool::new(false),
-            apple_catalog: AppleCatalog::new(),
+            apple_catalog: AppleCatalog::new(http.clone()),
+            http,
             storage,
             persisted: RwLock::new(persisted),
             runtime: RwLock::new(RuntimeState {
@@ -171,7 +183,7 @@ impl AppContext {
 
     pub async fn check_for_updates(self: &Arc<Self>) -> Result<AppState> {
         let current_version = self.handle.package_info().version.to_string();
-        let client = reqwest::Client::new();
+        let client = self.http.clone();
 
         match updater::check_latest(&client, &current_version).await {
             Ok(Some(update)) => {
@@ -211,7 +223,7 @@ impl AppContext {
         )
         .await;
 
-        let client = reqwest::Client::new();
+        let client = self.http.clone();
         let staged = match updater::download_and_stage(&client, &update.asset_url).await
         {
             Ok(staged) => staged,
@@ -558,7 +570,31 @@ impl AppContext {
             match_confidence,
         );
         {
+            // Re-check against the live queue before adding. The checks above
+            // ran on a snapshot taken before the catalog lookup awaited the
+            // network, and requests from chat, the dashboard and Channel
+            // Points can all land in that window — without this, a burst
+            // could slip past the per-user and duplicate limits.
             let mut persisted = self.persisted.write().await;
+            let live_check = queue_engine::validate_request(
+                &persisted.queue,
+                &persisted.settings,
+                requested_by,
+                query,
+                is_privileged,
+            )
+            .and_then(|()| match track.as_ref() {
+                Some(found) => queue_engine::ensure_track_allowed(
+                    &persisted.queue,
+                    &persisted.settings,
+                    found,
+                    is_privileged,
+                ),
+                None => Ok(()),
+            });
+            if let Err(message) = live_check {
+                return CommandResult::error(message);
+            }
             persisted.queue.push(request.clone());
         }
 
@@ -736,19 +772,53 @@ impl AppContext {
 
     pub async fn register_twitch_connection(
         &self,
-        writer: mpsc::UnboundedSender<String>,
+        id: u64,
+        writer: mpsc::UnboundedSender<twitch_service::Outbound>,
         task: JoinHandle<()>,
     ) {
         let mut connection = self.twitch_connection.lock().await;
-        *connection = Some(TwitchConnection { writer, task });
+        *connection = Some(TwitchConnection { id, writer, task });
     }
 
     pub async fn abort_twitch_connection(&self) {
         let mut connection = self.twitch_connection.lock().await;
         if let Some(existing) = connection.take() {
-            let _ = existing.writer.send("QUIT :Disconnecting\r\n".to_string());
+            let _ = existing
+                .writer
+                .send(twitch_service::Outbound::Raw("QUIT :Disconnecting\r\n".to_string()));
             existing.task.abort();
         }
+    }
+
+    /// Posts a message to the connected channel (rate-limited with the bot's
+    /// other replies). A no-op when the bot is offline.
+    pub async fn send_chat(&self, text: impl Into<String>) {
+        if let Some(connection) = self.twitch_connection.lock().await.as_ref() {
+            let _ = connection
+                .writer
+                .send(twitch_service::Outbound::chat(text));
+        }
+    }
+
+    /// The account the chat bot logs in as, resolved fresh for every
+    /// connection attempt.
+    pub async fn chat_identity(&self) -> Result<twitch_service::ChatIdentity> {
+        let settings = self.current_settings().await;
+        let login = settings.twitch.bot_username.trim().to_lowercase();
+        let password = crate::models::normalize_twitch_oauth_token(&settings.twitch.oauth_token);
+        if login.is_empty() || password.is_empty() {
+            anyhow::bail!("Sign in with Twitch, or enter a bot username and token.");
+        }
+        Ok(twitch_service::ChatIdentity {
+            login,
+            password,
+            refreshable: false,
+        })
+    }
+
+    /// Forces a refresh of the chat token after Twitch rejected it.
+    pub async fn force_refresh_chat_token(&self) -> Result<()> {
+        anyhow::bail!("This token cannot be refreshed automatically.")
     }
 
     pub async fn update_bot_status(
@@ -774,9 +844,14 @@ impl AppContext {
         self.emit_state().await;
     }
 
-    pub async fn clear_twitch_connection(&self) {
+    /// Clears the registered connection, but only if it is still the one
+    /// identified by `id` — a supervisor stopping late must not clear a newer
+    /// connection the user started in the meantime.
+    pub async fn clear_twitch_connection(&self, id: u64) {
         let mut connection = self.twitch_connection.lock().await;
-        *connection = None;
+        if connection.as_ref().map(|existing| existing.id) == Some(id) {
+            *connection = None;
+        }
     }
 
     pub async fn run_probe_cycle(self: &Arc<Self>) -> Result<ProbeSnapshot> {

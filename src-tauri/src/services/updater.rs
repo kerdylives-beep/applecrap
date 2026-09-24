@@ -74,6 +74,9 @@ pub async fn download_and_stage(client: &reqwest::Client, asset_url: &str) -> Re
     let bytes = client
         .get(asset_url)
         .header("User-Agent", UPDATER_USER_AGENT)
+        // A multi-megabyte download needs far longer than the shared
+        // client's default, which is sized for small API calls.
+        .timeout(std::time::Duration::from_secs(600))
         .send()
         .await?
         .error_for_status()

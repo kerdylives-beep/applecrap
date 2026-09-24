@@ -19,10 +19,10 @@ pub struct AppleCatalog {
 }
 
 impl AppleCatalog {
-    pub fn new() -> Self {
-        Self {
-            client: Client::new(),
-        }
+    /// Takes the app's shared HTTP client, which carries the timeouts: a
+    /// lookup with none could hang forever and stall request handling.
+    pub fn new(client: Client) -> Self {
+        Self { client }
     }
 
     pub async fn search_top_track(
