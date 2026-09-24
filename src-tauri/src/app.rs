@@ -343,8 +343,10 @@ impl AppContext {
         // state.json can ride the debounced flush instead of forcing a full
         // serialize + file write per line.
         self.mark_persist_dirty();
+        // Only the new line goes out; the UI appends it. Re-sending the whole
+        // app state here meant every log line (several per chat request)
+        // serialized everything, crossed IPC and re-rendered the dashboard.
         let _ = self.handle.emit("logAppended", entry);
-        self.emit_state().await;
     }
 
     pub async fn save_persisted(&self) -> Result<()> {

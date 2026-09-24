@@ -18,8 +18,25 @@ import {
   searchAppleMusic,
   sendRequestToManualReview,
 } from './tauri'
-import type { AppSettings, AppState, CommandResult, PanelKey, SearchResult, TrackMatch } from './types'
+import type { AppSettings, AppState, CommandResult, LogEntry, PanelKey, SearchResult, TrackMatch } from './types'
 import { buildDebugSummary, buildFeedbackMailto } from './utils'
+
+const MAX_VISIBLE_LOGS = 80
+
+/**
+ * Keeps the previous `logs` array when a new snapshot carries the same log
+ * lines, so memoized log views skip re-rendering on unrelated state changes.
+ */
+function withStableLogs(current: AppState | null, next: AppState): AppState {
+  if (
+    current &&
+    current.logs.length === next.logs.length &&
+    current.logs[0]?.id === next.logs[0]?.id
+  ) {
+    return { ...next, logs: current.logs }
+  }
+  return next
+}
 
 const defaultSettings: AppSettings = {
   twitch: {
@@ -69,11 +86,25 @@ export function useAppStore() {
   const refreshPromise = useRef<Promise<AppState> | null>(null)
 
   const syncState = useCallback((nextState: AppState) => {
-    setState(nextState)
+    setState((current) => withStableLogs(current, nextState))
     if (!hydratedDraft.current) {
       setSettingsDraft(nextState.settings)
       hydratedDraft.current = true
     }
+  }, [])
+
+  const appendLog = useCallback((entry: LogEntry) => {
+    setState((current) =>
+      current
+        ? {
+            ...current,
+            logs: [entry, ...current.logs.filter((existing) => existing.id !== entry.id)].slice(
+              0,
+              MAX_VISIBLE_LOGS,
+            ),
+          }
+        : current,
+    )
   }, [])
 
   const refreshState = useCallback(async (silent = false) => {
@@ -126,7 +157,7 @@ export function useAppStore() {
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     void loadState()
-      .then(() => bindAppEvents(syncState))
+      .then(() => bindAppEvents({ onStateChanged: syncState, onLogAppended: appendLog }))
       .then((unlisten) => {
         unsubscribe = unlisten
       })
@@ -142,7 +173,7 @@ export function useAppStore() {
       window.removeEventListener('focus', handleWindowFocus)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [refreshState, syncState])
+  }, [appendLog, refreshState, syncState])
 
   const queue = state?.queue ?? []
   const featuredRequest = queue[0] ?? null
@@ -344,6 +375,14 @@ export function useAppStore() {
     }
   }
 
+  // A stable identity for list rows: the handler itself is recreated every
+  // render, so rows call through a ref that always points at the latest one.
+  const removeQueueItemRef = useRef(removeQueueItem)
+  removeQueueItemRef.current = removeQueueItem
+  const removeQueueItemById = useCallback((id: string) => {
+    void removeQueueItemRef.current(id)
+  }, [])
+
   const wipeQueue = async () => {
     const nextState = await runAction('clear-queue', clearQueue)
     if (nextState) {
@@ -492,6 +531,7 @@ export function useAppStore() {
     stopBot,
     submitManualRequest,
     removeQueueItem,
+    removeQueueItemById,
     wipeQueue,
     runSearch,
     approveSelectedRequest,

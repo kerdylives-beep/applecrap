@@ -4,6 +4,7 @@ import type {
   ApproveRequestPayload,
   AppState,
   CommandResult,
+  LogEntry,
   ManualRequestPayload,
   OpenTrackPayload,
   ProbeResult,
@@ -89,10 +90,15 @@ export async function installUpdate() {
   return invoke<CommandResult>('install_update')
 }
 
-export async function bindAppEvents(onStateChanged: (payload: AppState) => void) {
+export async function bindAppEvents(handlers: {
+  onStateChanged: (payload: AppState) => void
+  // Log lines arrive on their own event so a new line doesn't require the
+  // backend to re-send (and the UI to re-render) the whole app state.
+  onLogAppended: (entry: LogEntry) => void
+}) {
   const unlisteners = await Promise.all([
-    listen<AppState>(appEvents.stateChanged, (event) => onStateChanged(event.payload)),
-    listen(appEvents.logAppended, () => undefined),
+    listen<AppState>(appEvents.stateChanged, (event) => handlers.onStateChanged(event.payload)),
+    listen<LogEntry>(appEvents.logAppended, (event) => handlers.onLogAppended(event.payload)),
     listen(appEvents.probeSnapshot, () => undefined),
   ])
 

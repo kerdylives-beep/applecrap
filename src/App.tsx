@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState, type ReactNode } from 'react'
+import { memo, useDeferredValue, useMemo, useState, type ReactNode } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import faviconUrl from '../img/favicon.ico'
 import styles from './App.module.css'
@@ -96,7 +96,9 @@ function StatusChip({
   )
 }
 
-function QueueRow({
+// Memoized with id-based callbacks: a queue change re-renders only the rows
+// whose item or selection actually changed.
+const QueueRow = memo(function QueueRow({
   item,
   active,
   onSelect,
@@ -104,11 +106,11 @@ function QueueRow({
 }: {
   item: QueueItem
   active: boolean
-  onSelect: () => void
-  onRemove: () => void
+  onSelect: (id: string) => void
+  onRemove: (id: string) => void
 }) {
   return (
-    <button type="button" className={cx(styles.queueRow, active && styles.queueRowActive)} onClick={onSelect}>
+    <button type="button" className={cx(styles.queueRow, active && styles.queueRowActive)} onClick={() => onSelect(item.id)}>
       <div className={styles.queuePrimary}>
         <strong>{queueHeadline(item)}</strong>
         <span>{queueSubline(item)}</span>
@@ -124,7 +126,7 @@ function QueueRow({
           className={styles.ghostButton}
           onClick={(event) => {
             event.stopPropagation()
-            onRemove()
+            onRemove(item.id)
           }}
         >
           Remove
@@ -132,7 +134,7 @@ function QueueRow({
       </div>
     </button>
   )
-}
+})
 
 function logToneClass(level: LogLevel) {
   switch (level) {
@@ -149,7 +151,7 @@ function logToneClass(level: LogLevel) {
   }
 }
 
-function LogList({ entries }: { entries: LogEntry[] }) {
+const LogList = memo(function LogList({ entries }: { entries: LogEntry[] }) {
   if (!entries.length) {
     return <p className={styles.emptyCopy}>No log lines match the current filter.</p>
   }
@@ -167,7 +169,7 @@ function LogList({ entries }: { entries: LogEntry[] }) {
       ))}
     </div>
   )
-}
+})
 
 function ModalShell({
   title,
@@ -210,14 +212,11 @@ function App() {
   const state = store.state
 
   const filteredLogs = useMemo(() => {
-    if (!state) {
-      return []
-    }
-
+    const logs = state?.logs ?? []
     return deferredLogFilter === 'all'
-      ? state.logs
-      : state.logs.filter((entry) => entry.level === deferredLogFilter)
-  }, [deferredLogFilter, state])
+      ? logs
+      : logs.filter((entry) => entry.level === deferredLogFilter)
+  }, [deferredLogFilter, state?.logs])
 
   if (!state) {
     return (
@@ -556,8 +555,8 @@ function App() {
                       key={item.id}
                       item={item}
                       active={store.selectedRequestId === item.id}
-                      onSelect={() => store.setSelectedRequestId(item.id)}
-                      onRemove={() => store.removeQueueItem(item.id)}
+                      onSelect={store.setSelectedRequestId}
+                      onRemove={store.removeQueueItemById}
                     />
                   ))
                 ) : (
