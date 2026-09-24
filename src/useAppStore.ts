@@ -5,8 +5,10 @@ import {
   bindAppEvents,
   bootstrapApp,
   cancelTwitchSignIn,
+  checkForUpdates as checkForUpdatesCommand,
   clearQueue,
   connectBot,
+  dismissAlert as dismissAlertCommand,
   dispatchNextRequest,
   disconnectBot,
   enqueueManualRequest,
@@ -15,17 +17,33 @@ import {
   installUpdate as installUpdateCommand,
   openOverlayPreview as openOverlayPreviewCommand,
   openTwitchSignInPage,
+  playerControl as playerControlCommand,
   removeRequest,
+  reportProblem as reportProblemCommand,
   revealDataFolder,
   saveSettings,
   searchAppleMusic,
   sendRequestToManualReview,
+  showPlayer as showPlayerCommand,
   signOutTwitch,
+  type PlayerOp,
 } from './tauri'
-import type { AppSettings, AppState, AuthSlot, CommandResult, LogEntry, PanelKey, SearchResult, TrackMatch } from './types'
+import type {
+  AppSettings,
+  AppState,
+  AuthSlot,
+  CommandResult,
+  LogEntry,
+  QueueItem,
+  SearchResult,
+  TrackMatch,
+  ViewKey,
+} from './types'
 import { buildDebugSummary, buildFeedbackMailto } from './utils'
 
 const MAX_VISIBLE_LOGS = 80
+// Settings save this long after the last edit.
+const AUTOSAVE_DELAY_MS = 700
 
 /**
  * Keeps the previous `logs` array when a new snapshot carries the same log
@@ -81,19 +99,34 @@ const defaultSettings: AppSettings = {
   },
 }
 
+export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error'
+
+function errorMessage(error: unknown) {
+  // Tauri commands reject with the backend's message as a plain string.
+  if (typeof error === 'string' && error) {
+    return error
+  }
+  return error instanceof Error ? error.message : 'The action failed.'
+}
+
 export function useAppStore() {
   const [state, setState] = useState<AppState | null>(null)
   const [settingsDraft, setSettingsDraft] = useState<AppSettings>(defaultSettings)
-  const [activePanel, setActivePanel] = useState<PanelKey>('dashboard')
-  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null)
-  const [manualUser, setManualUser] = useState('streamer')
+  const [view, setView] = useState<ViewKey>('desk')
+  const [manualUser, setManualUser] = useState('')
   const [manualQuery, setManualQuery] = useState('')
+  const [reviewId, setReviewId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult | null>(null)
-  const [notice, setNotice] = useState('Booting AppleCrap Alpha...')
+  const [notice, setNotice] = useState('Starting AppleCrap...')
   const [busyAction, setBusyAction] = useState<string | null>(null)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const hydratedDraft = useRef(false)
   const refreshPromise = useRef<Promise<AppState> | null>(null)
+  // Bumped on every edit; a save only writes the server's copy back into the
+  // draft when nothing was typed while it was in flight.
+  const draftRevision = useRef(0)
+  const savedRevision = useRef(0)
 
   const syncState = useCallback((nextState: AppState) => {
     setState((current) => withStableLogs(current, nextState))
@@ -125,118 +158,114 @@ export function useAppStore() {
     )
   }, [])
 
-  const refreshState = useCallback(async (silent = false) => {
-    if (refreshPromise.current) {
-      return refreshPromise.current
-    }
-
-    refreshPromise.current = (async () => {
-      const nextState = await bootstrapApp()
-      syncState(nextState)
-      if (!silent) {
-        setNotice(nextState.storage.warning ?? 'AppleCrap Alpha is ready.')
+  const refreshState = useCallback(
+    async (silent = false) => {
+      if (refreshPromise.current) {
+        return refreshPromise.current
       }
-      return nextState
-    })()
 
-    try {
-      return await refreshPromise.current
-    } finally {
-      refreshPromise.current = null
-    }
-  }, [syncState])
+      refreshPromise.current = (async () => {
+        const nextState = await bootstrapApp()
+        syncState(nextState)
+        if (!silent) {
+          setNotice(nextState.storage.warning ?? 'Ready.')
+        }
+        return nextState
+      })()
+
+      try {
+        return await refreshPromise.current
+      } finally {
+        refreshPromise.current = null
+      }
+    },
+    [syncState],
+  )
 
   useEffect(() => {
     let cancelled = false
     let unsubscribe: () => void = () => {}
-    const loadState = async (silent = false) => {
-      const nextState = await refreshState(silent)
-      if (cancelled) {
-        return
-      }
-
-      return nextState
-    }
     const refreshSilently = () => {
-      void loadState(true).catch(() => undefined)
+      void refreshState(true).catch(() => undefined)
     }
-    const handleWindowFocus = () => refreshSilently()
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         refreshSilently()
       }
     }
 
-    // No polling timer: the backend pushes `stateChanged` on every mutation,
-    // so a periodic full-state fetch was duplicating that work (a complete
-    // serialize + IPC round trip + React re-render every 1.5s while idle).
+    // No polling timer: the backend pushes `stateChanged` on every mutation.
     // Focus/visibility refreshes stay as a catch-up for missed events.
-    window.addEventListener('focus', handleWindowFocus)
+    window.addEventListener('focus', refreshSilently)
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
-    void loadState()
+    void refreshState()
       .then(() => bindAppEvents({ onStateChanged: syncState, onLogAppended: appendLog }))
       .then((unlisten) => {
-        unsubscribe = unlisten
+        if (cancelled) {
+          unlisten()
+        } else {
+          unsubscribe = unlisten
+        }
       })
       .catch((error) => {
         if (!cancelled) {
-          setNotice(error instanceof Error ? error.message : 'Failed to bootstrap the app.')
+          setNotice(errorMessage(error))
         }
       })
 
     return () => {
       cancelled = true
       unsubscribe()
-      window.removeEventListener('focus', handleWindowFocus)
+      window.removeEventListener('focus', refreshSilently)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [appendLog, refreshState, syncState])
 
   const queue = state?.queue ?? []
   const featuredRequest = queue[0] ?? null
-  const selectedRequest =
-    queue.find((item) => item.id === selectedRequestId) ??
-    featuredRequest ??
-    null
+  const reviewRequest = queue.find((item) => item.id === reviewId) ?? null
 
+  // The request being reviewed went away (removed, or matched elsewhere).
   useEffect(() => {
-    if (!selectedRequestId && featuredRequest) {
-      setSelectedRequestId(featuredRequest.id)
+    if (reviewId && state && !state.queue.some((item) => item.id === reviewId)) {
+      setReviewId(null)
+      setSearchResults(null)
     }
-  }, [featuredRequest, selectedRequestId])
+  }, [reviewId, state])
 
   const applyResultNotice = (result: CommandResult) => {
-    setNotice(result.message)
+    if (result.message) {
+      setNotice(result.message)
+    }
   }
 
-  const runAction = async <T,>(
-    actionName: string,
-    work: () => Promise<T>,
-    onSuccess?: (value: T) => void,
-  ) => {
+  const runAction = async <T,>(actionName: string, work: () => Promise<T>) => {
     setBusyAction(actionName)
     try {
-      const value = await work()
-      onSuccess?.(value)
-      return value
+      return await work()
     } catch (error) {
       console.error(error)
-      // Tauri commands reject with the backend's message as a plain string.
-      setNotice(
-        typeof error === 'string' && error
-          ? error
-          : error instanceof Error
-            ? error.message
-            : 'The action failed.',
-      )
+      setNotice(errorMessage(error))
       return undefined
     } finally {
       setBusyAction(null)
     }
   }
 
+  const adoptState = (nextState: AppState) => {
+    setState(nextState)
+    if (draftRevision.current === savedRevision.current) {
+      setSettingsDraft(nextState.settings)
+    }
+    hydratedDraft.current = true
+  }
+
+  // --- Settings -------------------------------------------------------------
+
   const updateDraft = <K extends keyof AppSettings>(section: K, patch: Partial<AppSettings[K]>) => {
+    draftRevision.current += 1
+    setSaveStatus('pending')
     setSettingsDraft((current) => ({
       ...current,
       [section]: {
@@ -246,133 +275,95 @@ export function useAppStore() {
     }))
   }
 
-  const saveDraftSettings = async () => {
-    const nextState = await runAction('save-settings', () => saveSettings(settingsDraft))
-    if (nextState) {
-      setState(nextState)
-      setSettingsDraft(nextState.settings)
-      hydratedDraft.current = true
-      setNotice('Settings saved.')
+  const saveNow = useCallback(async (draft: AppSettings) => {
+    const revision = draftRevision.current
+    setSaveStatus('saving')
+    try {
+      const nextState = await saveSettings(draft)
+      savedRevision.current = Math.max(savedRevision.current, revision)
+      setState((current) => withStableLogs(current, nextState))
+      if (draftRevision.current === revision) {
+        setSettingsDraft(nextState.settings)
+        setSaveStatus('saved')
+      }
+      return nextState
+    } catch (error) {
+      setSaveStatus('error')
+      setNotice(errorMessage(error))
+      return undefined
     }
-  }
+  }, [])
 
-  const setAutoQueueEnabled = async (enabled: boolean) => {
-    setSettingsDraft((current) => ({
-      ...current,
-      player: {
-        ...current.player,
-        autoQueue: enabled,
-      },
-    }))
-
-    const nextState = await runAction('toggle-auto-queue', () =>
-      saveSettings({
-        player: {
-          autoQueue: enabled,
-        },
-      }),
-    )
-
-    if (nextState) {
-      setState(nextState)
-      setSettingsDraft(nextState.settings)
-      hydratedDraft.current = true
-      setNotice(enabled ? 'Auto-queue enabled.' : 'Auto-queue paused.')
-    }
-  }
-
-  const setAudioOutputDevice = async (deviceId: string) => {
-    setSettingsDraft((current) => ({
-      ...current,
-      player: {
-        ...current.player,
-        audioOutputDevice: deviceId,
-      },
-    }))
-
-    const nextState = await runAction('set-audio-output', () =>
-      saveSettings({
-        player: {
-          audioOutputDevice: deviceId,
-        },
-      }),
-    )
-
-    if (nextState) {
-      setState(nextState)
-      setSettingsDraft(nextState.settings)
-      hydratedDraft.current = true
-      setNotice(deviceId ? 'Player audio routed to the selected device.' : 'Player audio routed to the system default.')
-    }
-  }
-
-  const setMediaKeysEnabled = async (enabled: boolean) => {
-    setSettingsDraft((current) => ({
-      ...current,
-      player: {
-        ...current.player,
-        mediaKeys: enabled,
-      },
-    }))
-
-    const nextState = await runAction('toggle-media-keys', () =>
-      saveSettings({
-        player: {
-          mediaKeys: enabled,
-        },
-      }),
-    )
-
-    if (nextState) {
-      setState(nextState)
-      setSettingsDraft(nextState.settings)
-      hydratedDraft.current = true
-      setNotice(
-        enabled
-          ? 'Media keys control AppleCrap while a track is loaded.'
-          : 'Media keys left to other apps.',
-      )
-    }
-  }
-
-  const openOverlayPreview = async () => {
-    const result = await runAction('open-overlay-preview', openOverlayPreviewCommand)
-    if (result) {
-      applyResultNotice(result)
-    }
-  }
-
-  const startBot = async () => {
-    const savedState = await runAction('save-settings', () => saveSettings(settingsDraft))
-    if (!savedState) {
+  // Autosave: a moment after the last edit.
+  useEffect(() => {
+    if (draftRevision.current === savedRevision.current || saveStatus !== 'pending') {
       return
     }
+    const timer = window.setTimeout(() => {
+      void saveNow(settingsDraft)
+    }, AUTOSAVE_DELAY_MS)
+    return () => window.clearTimeout(timer)
+  }, [saveNow, saveStatus, settingsDraft])
 
-    setState(savedState)
-    setSettingsDraft(savedState.settings)
-    hydratedDraft.current = true
+  const saveSetting = async <K extends keyof AppSettings>(
+    section: K,
+    patch: Partial<AppSettings[K]>,
+    message: string,
+  ) => {
+    setSettingsDraft((current) => ({ ...current, [section]: { ...current[section], ...patch } }))
+    const nextState = await runAction(`save-${section}`, () => saveSettings({ [section]: patch }))
+    if (nextState) {
+      adoptState(nextState)
+      setNotice(message)
+    }
+  }
 
+  const setAutoQueueEnabled = (enabled: boolean) =>
+    saveSetting('player', { autoQueue: enabled }, enabled ? 'Auto-queue is on.' : 'Auto-queue paused.')
+
+  const setAudioOutputDevice = (deviceId: string) =>
+    saveSetting(
+      'player',
+      { audioOutputDevice: deviceId },
+      deviceId ? 'Player audio routed to the selected device.' : 'Player audio routed to the system default.',
+    )
+
+  const setMediaKeysEnabled = (enabled: boolean) =>
+    saveSetting(
+      'player',
+      { mediaKeys: enabled },
+      enabled ? 'Media keys control AppleCrap while a track is loaded.' : 'Media keys left to other apps.',
+    )
+
+  // --- Twitch ---------------------------------------------------------------
+
+  const startBot = async () => {
+    // Pending edits (a new channel name, say) must land before connecting.
+    if (draftRevision.current !== savedRevision.current) {
+      const saved = await saveNow(settingsDraft)
+      if (!saved) {
+        return
+      }
+    }
     const nextState = await runAction('connect-bot', connectBot)
     if (nextState) {
-      setState(nextState)
-      setSettingsDraft(nextState.settings)
-      hydratedDraft.current = true
-      setNotice(nextState.botStatus.detail || 'Bot connected.')
+      adoptState(nextState)
+      setNotice(nextState.botStatus.detail || 'Connecting to Twitch chat.')
     }
   }
 
   const stopBot = async () => {
     const nextState = await runAction('disconnect-bot', disconnectBot)
     if (nextState) {
-      setState(nextState)
-      setNotice('Bot disconnected.')
+      adoptState(nextState)
+      setNotice('Chat disconnected.')
     }
   }
 
   const startTwitchSignIn = async (slot: AuthSlot) => {
     const nextState = await runAction('twitch-sign-in', () => beginTwitchSignIn(slot))
     if (nextState) {
-      setState(nextState)
+      adoptState(nextState)
       setNotice('Enter the code on Twitch to finish signing in.')
       // Save a click: open the activation page straight away.
       const opened = await openTwitchSignInPage().catch(() => null)
@@ -392,7 +383,7 @@ export function useAppStore() {
   const abortTwitchSignIn = async () => {
     const nextState = await runAction('twitch-cancel-sign-in', cancelTwitchSignIn)
     if (nextState) {
-      setState(nextState)
+      adoptState(nextState)
       setNotice('Sign-in cancelled.')
     }
   }
@@ -400,21 +391,23 @@ export function useAppStore() {
   const signOutOfTwitch = async (slot: AuthSlot) => {
     const nextState = await runAction('twitch-sign-out', () => signOutTwitch(slot))
     if (nextState) {
-      setState(nextState)
+      adoptState(nextState)
       setNotice('Signed out of Twitch.')
     }
   }
 
+  // --- Queue ----------------------------------------------------------------
+
   const submitManualRequest = async () => {
     const query = manualQuery.trim()
     if (!query) {
-      setNotice('Please include a song title or artist.')
+      setNotice('Type a song name first.')
       return
     }
 
     const result = await runAction('manual-request', () =>
       enqueueManualRequest({
-        requestedBy: manualUser.trim() || 'streamer',
+        requestedBy: manualUser.trim().replace(/^@/, '') || 'streamer',
         query,
       }),
     )
@@ -423,6 +416,7 @@ export function useAppStore() {
       applyResultNotice(result)
       if (result.ok) {
         setManualQuery('')
+        setManualUser('')
         await refreshState(true)
       }
     }
@@ -431,7 +425,7 @@ export function useAppStore() {
   const removeQueueItem = async (id: string) => {
     const nextState = await runAction('remove-request', () => removeRequest(id))
     if (nextState) {
-      setState(nextState)
+      adoptState(nextState)
       setNotice('Request removed.')
     }
   }
@@ -447,22 +441,122 @@ export function useAppStore() {
   const wipeQueue = async () => {
     const nextState = await runAction('clear-queue', clearQueue)
     if (nextState) {
-      setState(nextState)
+      adoptState(nextState)
       setNotice('Queue cleared.')
     }
   }
 
-  const runSearch = async () => {
-    const query = searchQuery.trim()
-    if (!query) {
+  const searchFor = async (query: string) => {
+    const trimmed = query.trim()
+    if (!trimmed) {
       setSearchResults(null)
       return
     }
-
-    const result = await runAction('search-apple-music', () => searchAppleMusic(query))
+    const result = await runAction('search-apple-music', () => searchAppleMusic(trimmed))
     if (result) {
       setSearchResults(result)
-      setNotice(`Found ${result.matches.length} Apple Music match(es).`)
+      setNotice(
+        result.matches.length
+          ? `Found ${result.matches.length} match(es) on Apple Music.`
+          : 'Apple Music found nothing for that. Try different words.',
+      )
+    }
+  }
+
+  const startReview = (item: QueueItem) => {
+    setReviewId(item.id)
+    setSearchQuery(item.query)
+    setSearchResults(null)
+    void searchFor(item.query)
+  }
+
+  // Stable for memoized rows, like removeQueueItemById.
+  const queueRef = useRef(queue)
+  queueRef.current = queue
+  const startReviewRef = useRef(startReview)
+  startReviewRef.current = startReview
+  const reviewRequestById = useCallback((id: string) => {
+    const item = queueRef.current.find((candidate) => candidate.id === id)
+    if (item) {
+      startReviewRef.current(item)
+    }
+  }, [])
+
+  const closeReview = () => {
+    setReviewId(null)
+    setSearchResults(null)
+  }
+
+  const approveReviewedRequest = async (track: TrackMatch) => {
+    const nextState = await runAction('approve-request', () =>
+      approveRequest({ requestId: reviewId, track }),
+    )
+    if (nextState) {
+      adoptState(nextState)
+      closeReview()
+      setNotice(`Matched to "${track.title}".`)
+    }
+  }
+
+  const dispatchFeaturedRequest = async () => {
+    const nextState = await runAction('dispatch-next', dispatchNextRequest)
+    if (nextState) {
+      adoptState(nextState)
+      setNotice('Sent the next request to the player.')
+    }
+  }
+
+  const sendToReview = async (id: string) => {
+    const nextState = await runAction('manual-review', () => sendRequestToManualReview(id))
+    if (nextState) {
+      adoptState(nextState)
+      setNotice('Request moved to review.')
+    }
+  }
+
+  // --- Player ---------------------------------------------------------------
+
+  const playerControl = async (op: PlayerOp) => {
+    const result = await runAction(`player-${op}`, () => playerControlCommand(op))
+    if (result && !result.ok) {
+      setNotice(result.message)
+    }
+  }
+
+  const showPlayer = () => {
+    void showPlayerCommand()
+  }
+
+  // --- Help, alerts, updates --------------------------------------------------
+
+  const dismissAlert = async (id: string) => {
+    const nextState = await runAction('dismiss-alert', () => dismissAlertCommand(id))
+    if (nextState) {
+      adoptState(nextState)
+    }
+  }
+
+  const reportProblem = async (alertId?: string) => {
+    if (!state) {
+      return
+    }
+    const result = await runAction('report-problem', reportProblemCommand)
+    if (!result) {
+      return
+    }
+    if (!result.ok) {
+      setNotice(result.message)
+      return
+    }
+    try {
+      window.open(buildFeedbackMailto(state, result.message), '_blank')
+      setNotice('Report saved and shown in Explorer. Attach it to the email that just opened.')
+    } catch (error) {
+      console.error(error)
+      setNotice(`Report saved to ${result.message}. Email it to kerdylives@gmail.com.`)
+    }
+    if (alertId) {
+      await dismissAlert(alertId)
     }
   }
 
@@ -470,29 +564,11 @@ export function useAppStore() {
     if (!state) {
       return
     }
-
-    const summary = buildDebugSummary(state)
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(summary)
-      setNotice('Debug summary copied.')
-      return
-    }
-
-    setNotice('Clipboard access is unavailable in this webview.')
-  }
-
-  const openFeedbackDraft = async () => {
-    if (!state) {
-      return
-    }
-
     try {
-      const mailto = buildFeedbackMailto(state)
-      window.open(mailto, '_blank')
-      setNotice('Opened a feedback draft in your default mail app.')
-    } catch (error) {
-      console.error(error)
-      setNotice('Could not open a feedback draft on this machine.')
+      await navigator.clipboard.writeText(buildDebugSummary(state))
+      setNotice('Summary copied.')
+    } catch {
+      setNotice("Couldn't reach the clipboard.")
     }
   }
 
@@ -516,9 +592,15 @@ export function useAppStore() {
       applyResultNotice(result)
       hydratedDraft.current = false
       const nextState = await refreshState(true)
-      setState(nextState)
-      setSettingsDraft(nextState.settings)
-      hydratedDraft.current = true
+      adoptState(nextState)
+    }
+  }
+
+  const checkForUpdates = async () => {
+    const nextState = await runAction('check-updates', checkForUpdatesCommand)
+    if (nextState) {
+      adoptState(nextState)
+      setNotice(nextState.update ? `Version ${nextState.update.version} is available.` : "You're on the latest version.")
     }
   }
 
@@ -529,38 +611,10 @@ export function useAppStore() {
     }
   }
 
-  const dispatchFeaturedRequest = async () => {
-    const nextState = await runAction('dispatch-next', dispatchNextRequest)
-    if (nextState) {
-      setState(nextState)
-      setNotice('Sent the front request to Apple Music.')
-    }
-  }
-
-  const approveSelectedRequest = async (track?: TrackMatch | null) => {
-    const nextState = await runAction('approve-request', () =>
-      approveRequest({
-        requestId: selectedRequest?.id ?? null,
-        track: track ?? null,
-      }),
-    )
-    if (nextState) {
-      setState(nextState)
-      setNotice('Request is ready to dispatch.')
-    }
-  }
-
-  const moveSelectedRequestToManualReview = async () => {
-    const id = selectedRequest?.id
-    if (!id) {
-      setNotice('No request is selected.')
-      return
-    }
-
-    const nextState = await runAction('manual-review', () => sendRequestToManualReview(id))
-    if (nextState) {
-      setState(nextState)
-      setNotice('Request moved to manual review.')
+  const openOverlayPreview = async () => {
+    const result = await runAction('open-overlay-preview', openOverlayPreviewCommand)
+    if (result) {
+      applyResultNotice(result)
     }
   }
 
@@ -568,22 +622,27 @@ export function useAppStore() {
     state,
     settingsDraft,
     updateDraft,
-    activePanel,
-    setActivePanel,
-    selectedRequest,
-    selectedRequestId,
-    setSelectedRequestId,
+    saveStatus,
+    view,
+    setView,
     featuredRequest,
     manualUser,
     setManualUser,
     manualQuery,
     setManualQuery,
+    reviewRequest,
     searchQuery,
     setSearchQuery,
     searchResults,
+    searchFor,
+    startReview,
+    reviewRequestById,
+    closeReview,
+    approveReviewedRequest,
+    sendToReview,
     notice,
+    setNotice,
     busyAction,
-    saveDraftSettings,
     setAutoQueueEnabled,
     setAudioOutputDevice,
     setMediaKeysEnabled,
@@ -595,18 +654,20 @@ export function useAppStore() {
     abortTwitchSignIn,
     signOutOfTwitch,
     submitManualRequest,
-    removeQueueItem,
     removeQueueItemById,
     wipeQueue,
-    runSearch,
-    approveSelectedRequest,
-    moveSelectedRequestToManualReview,
     dispatchFeaturedRequest,
+    playerControl,
+    showPlayer,
+    dismissAlert,
+    reportProblem,
     copyDebugSummary,
-    openFeedbackDraft,
     exportLogsAndState,
     openDataFolder,
     importLegacy,
+    checkForUpdates,
     installUpdate,
   }
 }
+
+export type AppStore = ReturnType<typeof useAppStore>

@@ -157,6 +157,17 @@ impl AppContext {
 
     /// Handle one media key press by driving the embedded player directly.
     #[cfg(desktop)]
+    /// Play/pause, skip or previous from the app's own buttons.
+    pub async fn player_control(self: &Arc<Self>, op: &str) -> CommandResult {
+        if !matches!(op, "togglePlayPause" | "skip" | "previous") {
+            return CommandResult::error("Unknown player control.");
+        }
+        match self.player_bridge.run_command(&self.handle, op, None).await {
+            Ok(_) => CommandResult::ok(""),
+            Err(error) => CommandResult::error(format!("The player didn't respond: {error}")),
+        }
+    }
+
     pub async fn handle_media_key(self: &Arc<Self>, op: &str) {
         let result = self
             .player_bridge

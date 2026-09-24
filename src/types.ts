@@ -9,15 +9,7 @@ export type QueueHandoffState =
   | 'confirmed-playing'
   | 'manual-review'
   | 'failed-dispatch'
-export type PanelKey =
-  | 'dashboard'
-  | 'bot'
-  | 'rules'
-  | 'now-playing'
-  | 'overlay'
-  | 'logs'
-  | 'about'
-  | 'debug'
+export type ViewKey = 'desk' | 'setup' | 'overlay' | 'activity' | 'help'
 
 export type TrackMatch = {
   id: string
@@ -136,6 +128,9 @@ export type ProbeSnapshot = {
   outputDevices: AudioOutputDevice[]
   currentOutput: string
   bitrate: number | null
+  artworkUrl?: string | null
+  durationMs?: number | null
+  positionMs?: number | null
 }
 
 export type DiagnosticsSnapshot = {
@@ -168,6 +163,22 @@ export type UpdateInfo = {
   version: string
   releaseUrl: string
   assetUrl: string
+  rolledBack?: boolean
+}
+
+export type AlertAction = { kind: 'reportProblem' } | { kind: 'openUrl'; label: string; url: string }
+
+export type Alert = {
+  id: string
+  tone: 'info' | 'warn' | 'error'
+  title: string
+  detail: string
+  action: AlertAction | null
+}
+
+export type NowPlayingRequest = {
+  requestedBy: string
+  source: string
 }
 
 export type AuthSlot = 'bot' | 'broadcaster'
@@ -206,6 +217,8 @@ export type AppState = {
   update?: UpdateInfo | null
   auth: AuthSummary
   channelPoints: ChannelPointsStatus
+  alerts: Alert[]
+  nowPlayingRequest: NowPlayingRequest | null
 }
 
 export type ManualRequestPayload = {

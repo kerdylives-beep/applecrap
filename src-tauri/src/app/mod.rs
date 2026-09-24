@@ -325,6 +325,7 @@ impl AppContext {
             auth: self.auth_summary(&persisted, &runtime),
             channel_points: runtime.channel_points_status.clone(),
             alerts: runtime.alerts.clone(),
+            now_playing_request: overlay::current_request(&runtime),
             stats: AppStats {
                 total_requests: persisted.queue.len(),
                 unresolved_requests: persisted

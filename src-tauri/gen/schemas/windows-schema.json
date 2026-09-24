@@ -285,6 +285,12 @@
           "markdownDescription": "Enables the player_bridge_report command without any pre-configured scope."
         },
         {
+          "description": "Enables the player_control command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-player-control",
+          "markdownDescription": "Enables the player_control command without any pre-configured scope."
+        },
+        {
           "description": "Enables the player_hide command without any pre-configured scope.",
           "type": "string",
           "const": "allow-player-hide",
@@ -475,6 +481,12 @@
           "type": "string",
           "const": "deny-player-bridge-report",
           "markdownDescription": "Denies the player_bridge_report command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the player_control command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-player-control",
+          "markdownDescription": "Denies the player_control command without any pre-configured scope."
         },
         {
           "description": "Denies the player_hide command without any pre-configured scope.",

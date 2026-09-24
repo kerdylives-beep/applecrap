@@ -373,6 +373,8 @@ impl ProbeSnapshot {
             && self.output_devices == other.output_devices
             && self.current_output == other.current_output
             && self.bitrate == other.bitrate
+            && self.artwork_url == other.artwork_url
+            && self.duration_ms == other.duration_ms
     }
 }
 
@@ -402,6 +404,14 @@ pub struct ProbeSnapshot {
     /// (AAC); lossless is only available in Apple's native apps.
     #[serde(default)]
     pub bitrate: Option<i64>,
+    /// Track length and position when this snapshot was taken (see
+    /// `updated_at`). Position is left out of `is_equivalent_to` so a
+    /// playing track doesn't rebroadcast state every cycle; the UI advances
+    /// it locally from the pair.
+    #[serde(default)]
+    pub duration_ms: Option<i64>,
+    #[serde(default)]
+    pub position_ms: Option<i64>,
 }
 
 impl Default for ProbeSnapshot {
@@ -424,6 +434,8 @@ impl Default for ProbeSnapshot {
             current_output: String::new(),
             artwork_url: None,
             bitrate: None,
+            duration_ms: None,
+            position_ms: None,
         }
     }
 }
@@ -578,6 +590,16 @@ pub struct AppState {
     pub auth: AuthSummary,
     pub channel_points: ChannelPointsStatus,
     pub alerts: Vec<Alert>,
+    /// Who asked for the song playing now, when it came from the queue.
+    pub now_playing_request: Option<NowPlayingRequest>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct NowPlayingRequest {
+    pub requested_by: String,
+    /// "twitch", "channel-points" or "dashboard".
+    pub source: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

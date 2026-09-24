@@ -51,6 +51,7 @@ pub struct BridgeStatus {
     pub catalog_id: Option<String>,
     pub item_id: Option<String>,
     pub duration_ms: Option<i64>,
+    pub position_ms: Option<i64>,
     pub artwork_url: Option<String>,
     pub bitrate: Option<i64>,
     pub output_devices: Vec<crate::models::AudioOutputDevice>,
@@ -271,6 +272,8 @@ impl PlayerBridge {
         snapshot.output_devices = status.output_devices.clone();
         snapshot.current_output = status.current_sink.clone();
         snapshot.artwork_url = status.artwork_url.clone();
+        snapshot.duration_ms = status.duration_ms;
+        snapshot.position_ms = status.position_ms;
         snapshot.bitrate = status.bitrate;
         if let Some(sink_error) = status.sink_error.as_ref().filter(|e| !e.is_empty()) {
             snapshot.last_error = Some(format!("Audio routing: {sink_error}"));

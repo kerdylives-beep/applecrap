@@ -186,7 +186,8 @@ pub fn run() {
             open_twitch_sign_in_page,
             sign_out_twitch,
             dismiss_alert,
-            report_problem
+            report_problem,
+            player_control
         ])
         .build(tauri::generate_context!())
         .expect("error while building AppleCrap")

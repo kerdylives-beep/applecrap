@@ -293,3 +293,11 @@ pub async fn report_problem(
 ) -> Result<crate::models::CommandResult, String> {
     Ok(context.report_problem().await)
 }
+
+#[tauri::command]
+pub async fn player_control(
+    op: String,
+    context: State<'_, Arc<AppContext>>,
+) -> Result<crate::models::CommandResult, String> {
+    Ok(context.player_control(&op).await)
+}

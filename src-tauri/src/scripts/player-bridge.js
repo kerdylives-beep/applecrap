@@ -281,6 +281,10 @@
       album: item ? item.albumName || '' : '',
       catalogId: catalogId ? String(catalogId) : null,
       itemId: item && item.id ? String(item.id) : null,
+      positionMs:
+        typeof music.currentPlaybackTime === 'number'
+          ? Math.round(music.currentPlaybackTime * 1000)
+          : null,
       durationMs:
         item && item.playbackDuration ? Math.round(item.playbackDuration * 1000) : null,
       artworkUrl: item ? artworkUrlOf(item) : null,

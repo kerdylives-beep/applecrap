@@ -46,19 +46,7 @@ impl AppContext {
                 .iter()
                 .any(|state| probe.status.eq_ignore_ascii_case(state));
 
-        // Only credit the stored requester while it still matches what the
-        // player reports, so attribution cannot go stale across tracks.
-        let requested_by = runtime.now_playing_request.as_ref().and_then(|item| {
-            let matches_track = item
-                .track
-                .as_ref()
-                .map(|track| {
-                    queue_engine::normalize_text(&track.title)
-                        == queue_engine::normalize_text(&probe.title)
-                })
-                .unwrap_or(false);
-            (matches_track && playing).then(|| item.requested_by.clone())
-        });
+        let requested_by = current_request(&runtime).map(|request| request.requested_by);
 
         let queue = persisted
             .queue
@@ -90,4 +78,29 @@ impl AppContext {
             queue,
         }
     }
+}
+
+/// The request behind the track playing now. Only credited while it still
+/// matches what the player reports, so attribution can't go stale across
+/// tracks.
+pub(super) fn current_request(runtime: &RuntimeState) -> Option<crate::models::NowPlayingRequest> {
+    let probe = &runtime.probe;
+    let playing = !probe.title.is_empty()
+        && ["playing", "paused", "loading"]
+            .iter()
+            .any(|state| probe.status.eq_ignore_ascii_case(state));
+    runtime.now_playing_request.as_ref().and_then(|item| {
+        let matches_track = item
+            .track
+            .as_ref()
+            .map(|track| {
+                queue_engine::normalize_text(&track.title)
+                    == queue_engine::normalize_text(&probe.title)
+            })
+            .unwrap_or(false);
+        (matches_track && playing).then(|| crate::models::NowPlayingRequest {
+            requested_by: item.requested_by.clone(),
+            source: item.source.clone(),
+        })
+    })
 }

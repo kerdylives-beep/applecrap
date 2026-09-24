@@ -4,28 +4,46 @@
 @import '@fontsource/saira-semi-condensed/600.css';
 @import '@fontsource/saira-semi-condensed/700.css';
 
+/* One warm near-black ground, amber for the music, violet for Twitch. */
 :root {
   --font-ui: 'IBM Plex Sans', 'Segoe UI', sans-serif;
   --font-display: 'Saira Semi Condensed', 'Segoe UI', sans-serif;
-  --text-primary: #edf5ff;
-  --text-muted: rgba(223, 234, 247, 0.78);
-  --text-dim: rgba(185, 201, 219, 0.64);
-  --accent-cyan: #4bade2;
-  --accent-warm: #ffb74d;
-  --border-strong: rgba(120, 152, 181, 0.2);
-  --shadow-panel: 0 22px 52px rgba(0, 0, 0, 0.34);
-  color: var(--text-primary);
+
+  --bg: #121114;
+  --sunken: #17161a;
+  --surface: #1b1a1f;
+  --surface-2: #232228;
+  --line: #2a2830;
+  --line-strong: #3a3742;
+
+  --text: #f2efea;
+  --muted: #a9a4ae;
+  --dim: #8a8591;
+
+  --accent: #f2a93b;
+  --accent-ink: #1a1203;
+  --accent-soft: #2b2119;
+  --accent-line: #5a4520;
+
+  --twitch: #c9beff;
+  --twitch-soft: #2a2440;
+  --twitch-line: #4a3f75;
+
+  --good: #6fcf97;
+  --good-soft: #1f2a24;
+  --bad: #ff8a7a;
+  --bad-soft: #35201d;
+  --bad-line: #6a352d;
+
+  color: var(--text);
+  background: var(--bg);
   font-family: var(--font-ui);
+  font-size: 14px;
   font-synthesis: none;
-  font-weight: 400;
-  line-height: 1.5;
+  line-height: 1.45;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background:
-    radial-gradient(circle at top left, rgba(75, 173, 226, 0.18), transparent 22%),
-    radial-gradient(circle at top right, rgba(255, 183, 77, 0.14), transparent 26%),
-    linear-gradient(180deg, #070d16 0%, #0a1220 36%, #0e1825 100%);
+  color-scheme: dark;
 }
 
 * {
@@ -35,32 +53,11 @@
 html,
 body,
 #root {
-  min-width: 320px;
   width: 100%;
   height: 100vh;
-  min-height: 100vh;
   margin: 0;
   overflow: hidden;
-}
-
-body {
-  background:
-    radial-gradient(circle at 12% 0%, rgba(75, 173, 226, 0.08), transparent 18%),
-    radial-gradient(circle at 88% 0%, rgba(255, 183, 77, 0.08), transparent 20%),
-    linear-gradient(180deg, #070d16 0%, #0a1220 36%, #0e1825 100%);
-}
-
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.08;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-  background-size: 32px 32px;
-  mask-image: radial-gradient(circle at center, black, transparent 92%);
+  background: var(--bg);
 }
 
 button,
@@ -68,12 +65,44 @@ input,
 select,
 textarea {
   font: inherit;
+  color: inherit;
 }
 
 button {
   cursor: pointer;
 }
 
-a {
-  color: inherit;
+button:disabled {
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border: 3px solid var(--bg);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }

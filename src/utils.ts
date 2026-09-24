@@ -169,9 +169,12 @@ export function buildDebugSummary(state: AppState) {
   return [headline, '', logSummary(state.logs)].join('\n')
 }
 
-export function buildFeedbackMailto(state: AppState) {
-  const subject = 'AppleCrap Alpha Feedback'
+export function buildFeedbackMailto(state: AppState, reportPath?: string) {
+  const subject = 'AppleCrap problem report'
   const body = [
+    ...(reportPath
+      ? [`Please attach the report file that opened in Explorer:`, reportPath, '']
+      : []),
     'What happened:',
     '',
     '',

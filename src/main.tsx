@@ -12,10 +12,20 @@ window.addEventListener('unhandledrejection', (event) => {
   console.error('Renderer rejection', event.reason)
 })
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </StrictMode>,
-)
+function start() {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </StrictMode>,
+  )
+}
+
+// In a plain browser during development, stand in for the backend so the UI
+// can be worked on without the app. Never part of a production build.
+if (import.meta.env.DEV && !('__TAURI_INTERNALS__' in window)) {
+  void import('./dev/demoBackend').then((demo) => demo.install()).then(start)
+} else {
+  start()
+}

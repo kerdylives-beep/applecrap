@@ -103,6 +103,28 @@ export async function openOverlayPreview() {
   return invoke<CommandResult>('open_overlay_preview')
 }
 
+export async function checkForUpdates() {
+  return invoke<AppState>('check_for_updates')
+}
+
+export type PlayerOp = 'togglePlayPause' | 'skip' | 'previous'
+
+export async function playerControl(op: PlayerOp) {
+  return invoke<CommandResult>('player_control', { op })
+}
+
+export async function reportProblem() {
+  return invoke<CommandResult>('report_problem')
+}
+
+export async function dismissAlert(id: string) {
+  return invoke<AppState>('dismiss_alert', { id })
+}
+
+export async function showPlayer() {
+  return invoke('player_show')
+}
+
 export async function installUpdate() {
   return invoke<CommandResult>('install_update')
 }
