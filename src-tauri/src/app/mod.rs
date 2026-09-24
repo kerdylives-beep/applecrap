@@ -1,0 +1,348 @@
+//! `AppContext`: the app's shared state and the operations on it.
+//!
+//! Split by concern; each submodule adds its methods to `AppContext`:
+//! - `queue` — request intake, matching, approval and dispatch
+//! - `playback` — the now-playing probe, playback confirmation, media keys
+//! - `twitch` — the chat connection and the identity it logs in with
+//! - `overlay` — the OBS overlay server
+//! - `maintenance` — updates, diagnostics, legacy import
+//!
+//! This file holds construction, background services, snapshots, logging
+//! and persistence.
+
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
+
+use anyhow::{anyhow, Result};
+use tauri::{async_runtime::JoinHandle, AppHandle, Emitter};
+use tokio::sync::{mpsc, Mutex, RwLock};
+
+use crate::{
+    models::{
+        compact_log_message, AppState, AppStats, ApproveRequestPayload, BotConnectionState,
+        BotStatus, CommandResult, DiagnosticsSnapshot, LegacyImportStatus, LogEntry, LogLevel,
+        OpenTrackPayload, OverlayQueueItem, OverlayState, PersistedState, ProbeResult,
+        ProbeSnapshot, QueueHandoffState, QueueItem, ResolutionStatus, SaveSettingsPayload,
+        SearchResult,
+    },
+    services::{
+        apple_catalog::AppleCatalog, diagnostics, overlay_server, player_bridge::PlayerBridge,
+        queue_engine, settings_store::SettingsStore, twitch_service, updater, window_shell,
+    },
+};
+
+mod maintenance;
+mod overlay;
+mod playback;
+mod queue;
+mod twitch;
+
+pub use playback::media_key_op;
+
+pub struct AppContext {
+    pub handle: AppHandle,
+    pub storage: SettingsStore,
+    pub player_bridge: PlayerBridge,
+    /// One shared HTTP client for every outbound call. It carries the
+    /// connect and request timeouts; reqwest's default has none, so a single
+    /// stuck request could hang whatever was waiting on it indefinitely.
+    pub http: reqwest::Client,
+    /// Set when persisted state has unwritten changes awaiting the debounced
+    /// flush (see `mark_persist_dirty`).
+    pending_persist: AtomicBool,
+    /// Serializes state saves (see `save_persisted`).
+    save_lock: Mutex<()>,
+    apple_catalog: AppleCatalog,
+    persisted: RwLock<PersistedState>,
+    runtime: RwLock<RuntimeState>,
+    twitch_connection: Mutex<Option<TwitchConnection>>,
+    /// Running overlay server, with the port it was bound to so a settings
+    /// change can tell whether it needs restarting.
+    overlay_task: Mutex<Option<(u16, JoinHandle<()>)>>,
+}
+
+struct TwitchConnection {
+    id: u64,
+    writer: mpsc::UnboundedSender<twitch_service::Outbound>,
+    task: JoinHandle<()>,
+}
+
+struct RuntimeState {
+    bot_status: BotStatus,
+    probe: ProbeSnapshot,
+    diagnostics: DiagnosticsSnapshot,
+    legacy_import: LegacyImportStatus,
+    last_confirmed_queue_id: Option<String>,
+    last_session_signature: String,
+    last_devices_signature: String,
+    last_probe_error: String,
+    auto_handoff_in_flight: bool,
+    update: Option<crate::models::UpdateInfo>,
+    media_keys_claimed: bool,
+    /// The request whose track is currently playing. Kept because confirming
+    /// playback removes the item from the queue, and the overlay still wants
+    /// to credit whoever asked for it.
+    now_playing_request: Option<QueueItem>,
+}
+
+impl AppContext {
+    pub fn initialize(handle: AppHandle) -> Result<Self> {
+        let mut storage = SettingsStore::resolve()?;
+        let _ = storage.append_runtime_log(&format!(
+            "[INFO] {} AppleCrap Alpha starting. data_dir={}",
+            crate::models::now_iso(),
+            storage.data_dir.display()
+        ));
+        let persisted = storage.load_persisted_state();
+        let _ = storage.save_persisted_state(&persisted);
+        // Only offer the legacy Electron import while the app is unconfigured;
+        // once a bot is set up the old data is noise.
+        let legacy_import = if persisted.settings.twitch.oauth_token.trim().is_empty()
+            && persisted.settings.twitch.channel.trim().is_empty()
+        {
+            storage.detect_legacy_import()
+        } else {
+            LegacyImportStatus::default()
+        };
+
+        let http = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(20))
+            .user_agent(concat!("AppleCrap/", env!("CARGO_PKG_VERSION")))
+            .build()?;
+
+        Ok(Self {
+            handle,
+            player_bridge: PlayerBridge::new(),
+            pending_persist: AtomicBool::new(false),
+            save_lock: Mutex::new(()),
+            apple_catalog: AppleCatalog::new(http.clone()),
+            http,
+            storage,
+            persisted: RwLock::new(persisted),
+            runtime: RwLock::new(RuntimeState {
+                bot_status: BotStatus::default(),
+                probe: ProbeSnapshot::default(),
+                diagnostics: DiagnosticsSnapshot {
+                    last_summary: "Alpha diagnostics ready.".to_string(),
+                    ..Default::default()
+                },
+                legacy_import,
+                last_confirmed_queue_id: None,
+                last_session_signature: String::new(),
+                last_devices_signature: String::new(),
+                last_probe_error: String::new(),
+                auto_handoff_in_flight: false,
+                update: None,
+                media_keys_claimed: false,
+                now_playing_request: None,
+            }),
+            twitch_connection: Mutex::new(None),
+            overlay_task: Mutex::new(None),
+        })
+    }
+
+    pub fn start_background_services(self: &Arc<Self>) {
+        let probe_context = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            loop {
+                let _ = probe_context.run_probe_cycle().await;
+                tokio::time::sleep(Duration::from_millis(2500)).await;
+            }
+        });
+
+        let auto_connect_context = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            if auto_connect_context
+                .current_settings()
+                .await
+                .twitch
+                .auto_connect
+            {
+                if let Err(error) = auto_connect_context.connect_bot().await {
+                    auto_connect_context
+                        .add_log(LogLevel::Error, format!("Auto-connect failed: {error}"))
+                        .await;
+                }
+            }
+        });
+
+        let update_context = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            let _ = update_context.check_for_updates().await;
+        });
+
+        let overlay_context = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            overlay_context.sync_overlay_server().await;
+        });
+
+        // Debounced writer for low-stakes state changes (log lines). Queue and
+        // settings mutations still write through immediately.
+        let persist_context = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(3)).await;
+                if persist_context.pending_persist.load(Ordering::Relaxed) {
+                    let _ = persist_context.save_persisted().await;
+                }
+            }
+        });
+
+        // Resume auto-queue for requests that were pending when the app last
+        // closed. Delayed so the embedded player has time to load MusicKit.
+        let resume_context = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            resume_context.ensure_queue_progress("startup").await;
+        });
+    }
+
+    pub async fn snapshot(&self) -> AppState {
+        let persisted = self.persisted.read().await;
+        let runtime = self.runtime.read().await;
+        let matched_requests = persisted
+            .queue
+            .iter()
+            .filter(|item| item.track.is_some())
+            .count();
+        let ready_request = persisted
+            .queue
+            .iter()
+            .find(|item| {
+                matches!(
+                    item.handoff_state,
+                    QueueHandoffState::ReadyToSend
+                        | QueueHandoffState::ManualReview
+                        | QueueHandoffState::PendingMatch
+                )
+            })
+            .cloned();
+
+        AppState {
+            settings: persisted.settings.clone(),
+            queue: persisted.queue.clone(),
+            ready_request,
+            logs: persisted.logs.iter().take(80).cloned().collect(),
+            bot_status: runtime.bot_status.clone(),
+            probe: runtime.probe.clone(),
+            diagnostics: runtime.diagnostics.clone(),
+            legacy_import: runtime.legacy_import.clone(),
+            storage: self.storage.storage.clone(),
+            update: runtime.update.clone(),
+            stats: AppStats {
+                total_requests: persisted.queue.len(),
+                unresolved_requests: persisted
+                    .queue
+                    .iter()
+                    .filter(|item| item.track.is_none())
+                    .count(),
+                matched_requests,
+                connected_since: runtime.bot_status.last_event_at.clone(),
+            },
+        }
+    }
+
+    pub async fn emit_state(&self) {
+        let snapshot = self.snapshot().await;
+        let _ = self.handle.emit("stateChanged", snapshot);
+    }
+
+    pub async fn add_log(&self, level: LogLevel, message: impl Into<String>) {
+        let message = message.into();
+        let entry = LogEntry {
+            id: uuid::Uuid::new_v4().to_string(),
+            level,
+            message: compact_log_message(&message),
+            timestamp: crate::models::now_iso(),
+        };
+        let runtime_line = format!(
+            "[{}] {} {}",
+            log_level_label(&entry.level),
+            entry.timestamp,
+            message
+        );
+
+        {
+            let mut persisted = self.persisted.write().await;
+            persisted.logs.insert(0, entry.clone());
+            persisted.logs.truncate(150);
+        }
+
+        let _ = self.storage.append_runtime_log(&runtime_line);
+        // Log lines are already durable in runtime.log; the copy inside
+        // state.json can ride the debounced flush instead of forcing a full
+        // serialize + file write per line.
+        self.mark_persist_dirty();
+        // Only the new line goes out; the UI appends it. Re-sending the whole
+        // app state here meant every log line (several per chat request)
+        // serialized everything, crossed IPC and re-rendered the dashboard.
+        let _ = self.handle.emit("logAppended", entry);
+    }
+
+    pub async fn save_persisted(&self) -> Result<()> {
+        // One save at a time, so a slower write of an older snapshot can never
+        // land after a newer one.
+        let _write_turn = self.save_lock.lock().await;
+        // Clear the flag before taking the snapshot: a change that races in
+        // afterwards re-marks it and is picked up by the next flush, instead
+        // of being cleared without ever being written.
+        self.pending_persist.store(false, Ordering::Relaxed);
+        let state = self.persisted.read().await.clone();
+        let target = self.storage.state_target();
+        // File I/O off the async runtime; saves include an fsync.
+        tokio::task::spawn_blocking(move || target.save(&state))
+            .await
+            .map_err(|error| anyhow!("save task failed: {error}"))?
+    }
+
+    /// Queue a state write for the background flusher. Used for low-stakes,
+    /// high-frequency changes (log lines); queue and settings mutations still
+    /// persist immediately via `save_persisted`.
+    fn mark_persist_dirty(&self) {
+        self.pending_persist.store(true, Ordering::Relaxed);
+    }
+
+    /// Write out any debounced changes. Called on shutdown so a queued log
+    /// flush is never lost when the app closes.
+    pub async fn flush_pending_state(&self) {
+        if self.pending_persist.load(Ordering::Relaxed) {
+            let _ = self.save_persisted().await;
+        }
+    }
+
+    pub async fn current_settings(&self) -> crate::models::AppSettings {
+        self.persisted.read().await.settings.clone()
+    }
+
+    pub async fn save_settings(self: &Arc<Self>, payload: SaveSettingsPayload) -> Result<AppState> {
+        {
+            // Merge under the write lock. Reading, merging, then writing in a
+            // separate step let two quick changes (say, two toggles flipped in
+            // a row) both start from the same copy, and one of them was lost.
+            let mut persisted = self.persisted.write().await;
+            persisted.settings.merge_patch(payload);
+        }
+
+        self.save_persisted().await?;
+        self.emit_state().await;
+        self.sync_overlay_server().await;
+        self.ensure_queue_progress("settings update").await;
+        Ok(self.snapshot().await)
+    }
+}
+
+fn log_level_label(level: &LogLevel) -> &'static str {
+    match level {
+        LogLevel::Info => "INFO",
+        LogLevel::Warn => "WARN",
+        LogLevel::Error => "ERROR",
+        LogLevel::Debug => "DEBUG",
+    }
+}
