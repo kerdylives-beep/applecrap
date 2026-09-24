@@ -168,7 +168,7 @@ impl AppContext {
                 bot_status: BotStatus::default(),
                 probe: ProbeSnapshot::default(),
                 diagnostics: DiagnosticsSnapshot {
-                    last_summary: "Alpha diagnostics ready.".to_string(),
+                    last_summary: "Diagnostics ready.".to_string(),
                     ..Default::default()
                 },
                 legacy_import,

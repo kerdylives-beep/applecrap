@@ -71,7 +71,7 @@ impl SettingsStore {
             (
                 fallback_dir,
                 StorageMode::Fallback,
-                Some("Portable data folder was not writable, so AppleCrap Alpha fell back to Local AppData.".to_string()),
+                Some("The folder next to the app isn't writable, so AppleCrap keeps its data in Local AppData instead.".to_string()),
             )
         };
 

@@ -9,8 +9,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
 const targetReleaseDir = path.join(rootDir, 'src-tauri', 'target', 'release')
 const outputRoot = path.join(rootDir, 'release', 'portable')
-const portableDir = path.join(outputRoot, 'AppleCrap Alpha')
-const portableZip = path.join(outputRoot, 'AppleCrap Alpha.zip')
+// The folder and exe names only matter for new downloads: an update keeps
+// whatever exe name the install already has.
+const portableDir = path.join(outputRoot, 'AppleCrap')
+const portableZip = path.join(outputRoot, 'AppleCrap.zip')
 
 const releaseEntries = await fs.readdir(targetReleaseDir, { withFileTypes: true })
 const executables = releaseEntries
@@ -25,12 +27,16 @@ if (!executables.length) {
 const sourceExecutable = path.join(targetReleaseDir, executables[0])
 await fs.rm(portableDir, { recursive: true, force: true })
 await fs.mkdir(path.join(portableDir, 'data'), { recursive: true })
-await fs.copyFile(sourceExecutable, path.join(portableDir, 'AppleCrap Alpha.exe'))
+await fs.copyFile(sourceExecutable, path.join(portableDir, 'AppleCrap.exe'))
 await fs.writeFile(path.join(portableDir, 'README.txt'), buildPortableReadme(), 'utf8')
 
 await compressDirectory(portableDir, portableZip)
-console.log(`Portable alpha created:\n- ${portableDir}\n- ${portableZip}`)
-await signRelease(portableZip)
+console.log(`Portable build created:\n- ${portableDir}\n- ${portableZip}`)
+const signed = await signRelease(portableZip)
+if (signed) {
+  // Check the finished zip exactly as the in-app updater will.
+  await import('./verify-release.mjs')
+}
 
 /**
  * Writes `<zip>.sig`: a base64 ed25519 signature over the zip. The in-app
@@ -57,36 +63,37 @@ async function signRelease(zipPath) {
       `\n*** UNSIGNED BUILD: no signing key at ${keyPath}.\n` +
         '*** The in-app updater will not install this release automatically.\n',
     )
-    return
+    return false
   }
 
   const signature = crypto.sign(null, await fs.readFile(zipPath), crypto.createPrivateKey(keyPem))
   await fs.writeFile(signaturePath, signature.toString('base64'), 'utf8')
   console.log(`- ${signaturePath} (signed)`)
+  return true
 }
 
 function buildPortableReadme() {
   return [
-    'AppleCrap Alpha Portable',
-    '========================',
+    'AppleCrap',
+    '=========',
     '',
-    'What this is:',
-    '- Windows-first Twitch to Apple Music request handoff desk.',
-    '- Portable alpha build with local diagnostics and queue moderation.',
+    'Twitch song requests, played through Apple Music.',
     '',
-    'How to run:',
-    '1. Unzip this folder anywhere you have write access.',
-    '2. Launch "AppleCrap Alpha.exe".',
-    '3. Keep the "data" folder beside the executable for portable storage.',
+    'Getting started:',
+    '1. Unzip this folder anywhere you can write files (not Program Files).',
+    '2. Run "AppleCrap.exe". If Windows says it protected your PC, click',
+    '   "More info", then "Run anyway". This only happens the first time.',
+    '3. Follow the three setup steps: sign in to Apple Music, sign in with',
+    '   Twitch, connect to chat.',
     '',
-    'Important prerequisites:',
-    '- WebView2 is required on Windows for Tauri apps.',
-    '- A Twitch bot account token that starts with oauth: is required for chat connection.',
-    '- An Apple Music subscription. Click "Player" inside the app and sign in once; no other Apple software is needed.',
+    'Your settings and queue live in the "data" folder next to the app.',
+    'Updates install themselves from the banner at the top of the app.',
     '',
-    'Diagnostics:',
-    '- Use the in-app "Export diagnostics" action to create a support bundle.',
-    '- The app keeps portable data in ./data when possible and falls back to Local AppData if the folder is not writable.',
+    'You need Windows with WebView2 (already on Windows 10 and 11) and an',
+    'Apple Music subscription. No Apple software needs to be installed.',
+    '',
+    'Something wrong? Help > Report a problem saves a report and opens an',
+    'email to send it with.',
     '',
   ].join('\n')
 }

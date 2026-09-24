@@ -44,7 +44,7 @@ export class ErrorBoundary extends Component<Props, State> {
             }}
           >
             <p style={{ marginTop: 0, marginBottom: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#ffb74d' }}>
-              AppleCrap Alpha
+              AppleCrap
             </p>
             <h1 style={{ marginTop: 0 }}>Renderer crashed</h1>
             <p>The React UI hit an error after loading.</p>

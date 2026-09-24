@@ -208,7 +208,7 @@ impl AppContext {
 
     pub async fn reveal_data_folder(&self) -> CommandResult {
         match window_shell::reveal_directory(&self.storage.data_dir) {
-            Ok(_) => CommandResult::ok("Opened the AppleCrap Alpha data folder."),
+            Ok(_) => CommandResult::ok("Opened the AppleCrap data folder."),
             Err(error) => CommandResult::error(error.to_string()),
         }
     }

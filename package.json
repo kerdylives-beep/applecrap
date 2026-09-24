@@ -1,7 +1,7 @@
 {
   "name": "applecrap-alpha",
   "private": true,
-  "version": "0.4.0-alpha.1",
+  "version": "0.5.0-beta.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1420",
@@ -14,7 +14,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build --no-bundle",
-    "tauri:portable": "npm run build:icons && npm run build && tauri build --no-bundle && node scripts/pack-portable.mjs"
+    "tauri:portable": "npm run build:icons && npm run build && tauri build --no-bundle && node scripts/pack-portable.mjs",
+    "verify:release": "node scripts/verify-release.mjs"
   },
   "dependencies": {
     "@fontsource/ibm-plex-sans": "^5.2.6",

@@ -23,7 +23,7 @@ fn validate_external_target(target: &str) -> Result<()> {
         .to_ascii_lowercase();
 
     if parsed.scheme() != "https" || host != "music.apple.com" {
-        anyhow::bail!("Only https://music.apple.com links can be opened from AppleCrap Alpha.");
+        anyhow::bail!("Only https://music.apple.com links can be opened from AppleCrap.");
     }
 
     Ok(())

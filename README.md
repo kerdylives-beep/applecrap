@@ -1,14 +1,18 @@
-# AppleCrap Alpha
+# AppleCrap
 
-AppleCrap Alpha is a portable Windows app for taking song requests from Twitch chat and handing them off to Apple Music. It is built for streamers who want a small request desk beside their stream setup without running a full bot dashboard in the browser.
+AppleCrap is a portable Windows app for taking song requests from Twitch chat and Channel Points and playing them through Apple Music. It is built for streamers who want a small request desk beside their stream setup without running a full bot dashboard in the browser.
 
-> Alpha means usable, but still early. Expect sharp edges.
+> Beta: it works and it's used on real streams, but you may still find rough edges.
 
 ## Download
 
-- ⬇️ [Download AppleCrap Alpha for Windows](https://github.com/kerdylives-beep/applecrap/releases/download/v0.4.0-alpha.1/AppleCrap.Alpha.zip)
-- 📦 Latest portable zip: `v0.4.0-alpha.1`
-- 🪟 Unzip it, run `AppleCrap Alpha.exe`, and keep the `data` folder beside it.
+- ⬇️ [Download AppleCrap for Windows](https://github.com/kerdylives-beep/applecrap/releases/download/v0.5.0-beta.1/AppleCrap.zip)
+- 📦 Latest portable zip: `v0.5.0-beta.1`
+- 🪟 Unzip it and run `AppleCrap.exe`. Your settings live in the `data` folder next to it.
+
+**"Windows protected your PC"?** The first time you run it, Windows may show this because the app
+isn't code-signed yet (signing costs money every month). Click **More info**, then **Run anyway**.
+It only asks once, and updates never trigger it again.
 
 ## What It Does
 
@@ -16,10 +20,11 @@ AppleCrap Alpha is a portable Windows app for taking song requests from Twitch c
 - 💎 Optionally takes requests through a Channel Points reward, refunding points when a request can't be queued
 - 🔎 Looks up likely Apple Music matches automatically
 - 🧾 Keeps a live queue of requested songs
-- ✅ Lets you approve, remove, or manually review requests
+- ✅ Lets you approve, remove, or pick the right match for a request, right in the queue
 - 🎧 Queues matched tracks straight into Apple Music as Play Next, so they play automatically and the streamer's playlist resumes once requests run out
 - 📺 Serves a now-playing overlay for OBS (current song, requester, and what is next)
-- 🧰 Exports diagnostics if something goes sideways
+- 🛟 Tells you plainly when something needs attention (a crash, Apple Music trouble, chat offline) and saves a problem report in one click
+- ♻️ Updates itself, and switches back to the previous version automatically if an update won't start
 - 💾 Stores data in the portable folder when possible
 
 ## Who It Is For
@@ -30,21 +35,21 @@ AppleCrap is for streamers who:
 - play music through Apple Music
 - want viewers to request songs without manually copying every title
 - prefer a portable app over a traditional installer
-- are okay with testing an alpha build
-
-It is probably not for you yet if you need a polished, signed, one-click production app.
+- are okay with a beta
 
 ## Screenshots
 
-The request desk — live queue, match confidence, and auto-queue status at a glance:
+The request desk: what's playing and who asked for it, with the queue underneath. Anything that needs you (like a request with no match yet) stands out:
 
-<img src="img/screenshots/dashboard.png" width="420" alt="AppleCrap dashboard showing a dispatched request for Human Nature by Michael Jackson, with auto-queue enabled and two requests waiting">
+<img src="img/screenshots/desk.png" width="420" alt="The AppleCrap desk: Human Nature by Michael Jackson playing, requested with Channel Points, and four requests queued, one of them highlighted for review">
+
+Give it a wider window and the activity feed joins in:
+
+<img src="img/screenshots/desk-wide.png" width="720" alt="The AppleCrap desk in a wide window, with now playing on the left, the queue in the middle and recent activity on the right">
 
 The embedded Apple Music player — sign in once, then it can stay hidden all stream while requests queue into it:
 
 <img src="img/screenshots/player.png" width="720" alt="The embedded Apple Music player window, signed in and showing the Home page">
-
-> These shots use the current alpha look; a visual refresh is planned.
 
 ## Requirements
 
@@ -58,15 +63,16 @@ The Apple Music for Windows desktop app is **not** required and is not used — 
 
 ## How To Use
 
-1. Download `AppleCrap Alpha.zip` from a release, unzip it somewhere you can write files, and run `AppleCrap Alpha.exe`.
-2. Click **Player ↗** in the title bar to open the embedded Apple Music player, and sign in to Apple Music. You only need to do this once — the sign-in persists across restarts.
-3. Open **Bot**, click **Sign in with Twitch** under *Your channel*, and enter the code Twitch shows you at twitch.tv/activate. No token copying — AppleCrap keeps the sign-in fresh on its own. Add a separate *Bot account* the same way if you want replies to come from a bot instead of your channel.
-4. Click **Save + connect**.
-5. That's it. Matched requests auto-queue into Apple Music in order (FIFO), each one is confirmed once it actually starts playing, and the streamer's own playlist picks back up automatically once the request queue is empty.
+1. Download `AppleCrap.zip` from a release, unzip it somewhere you can write files, and run `AppleCrap.exe`.
+2. A short setup guide walks you through the rest:
+   - **Sign in to Apple Music** in the app's own player window. You only do this once.
+   - **Sign in with Twitch**: enter the code Twitch shows you at twitch.tv/activate. No token copying — AppleCrap keeps the sign-in fresh on its own. You can add a separate bot account later in **Setup** if you want replies to come from a bot.
+   - **Connect to chat.**
+3. That's it. Matched requests auto-queue into Apple Music in order (FIFO), each one is confirmed once it actually starts playing, and the streamer's own playlist picks back up automatically once the request queue is empty.
 
 Portable storage uses `./data` beside the executable. If that folder is not writable, the app falls back to Local AppData and tells you in the UI.
 
-Your keyboard's **media keys** (play/pause, next, previous) control the player while it has a track loaded — no need to focus the app first. When AppleCrap is not holding a track, the keys go back to your other apps, so they only take over the keys while they are actually the thing playing. You can turn this off from the player section of the dashboard. The current track also shows in the Windows "now playing" popup.
+Your keyboard's **media keys** (play/pause, next, previous) control the player while it has a track loaded — no need to focus the app first. When AppleCrap is not holding a track, the keys go back to your other apps, so they only take over the keys while they are actually the thing playing. You can turn this off in **Setup**. The current track also shows in the Windows "now playing" popup.
 
 The player window can stay hidden the whole time; while hidden it stops drawing entirely, so it costs almost nothing to leave running beside a game.
 
@@ -74,7 +80,7 @@ The player window can stay hidden the whole time; while hidden it stops drawing 
 AppleCrap pins it there so it can never drop to the lower setting. Lossless and Spatial Audio are
 exclusive to Apple's own native apps and are not available to any browser-based player. For a stream
 this makes no practical difference — Twitch re-encodes all audio to 160 kbps AAC or lower before it
-reaches viewers. The current bitrate is shown in the Now Playing panel.
+reaches viewers. The current bitrate is shown under the now-playing card.
 
 ## Stream Overlay
 
@@ -92,8 +98,8 @@ fades itself out when nothing is playing, so an idle scene stays clean. The pane
 
 Affiliate and Partner channels can take requests through Channel Points instead of (or as well as) the chat command.
 
-1. Sign in as your channel in **Bot** (see above).
-2. Tick **Take song requests through Channel Points**, pick a reward name and cost, and click **Save**.
+1. Sign in as your channel (see above).
+2. In **Setup**, tick **Take song requests through Channel Points** and pick a reward name and cost. It saves by itself.
 
 AppleCrap creates the reward on your channel. Each redemption goes through the same queue rules as
 `!request`: if the song is queued, the redemption is marked complete; if it is turned away (queue
@@ -144,12 +150,24 @@ Skip the current track (mods/broadcaster only):
 !skip
 ```
 
+## Privacy
+
+AppleCrap has no servers and no analytics. Everything stays on your PC except what it has to send:
+
+- **Twitch** — to read and reply in your chat, and (if you use it) to manage your Channel Points reward.
+- **Apple** — song searches, and the Apple Music player itself.
+- **GitHub** — to check for and download updates.
+
+A problem report is a file saved on your PC; nothing is sent unless you attach it to an email yourself.
+It contains your settings, queue and recent activity, never passwords or sign-in tokens.
+
 ## Safety Notes
 
 - 🔐 Twitch sign-ins are stored in the app data file, encrypted with your Windows account (DPAPI), so a copied `state.json` is useless on another PC or user.
 - 🧼 Diagnostics exports never include tokens.
 - ✍️ Updates are signed; the app refuses to install an update whose signature doesn't check out.
 - 🏠 The overlay only answers requests from your own machine.
+- ↩️ If an update won't start, AppleCrap puts the previous version back and won't try that update again.
 - 🚪 Track links are limited to Apple Music.
 - 🎚️ Auto-queue can be paused from the dashboard; a "Send now" action is always available for the front request when you want manual control.
 
@@ -191,24 +209,29 @@ npm run tauri:portable
 
 Release builds are signed with an Ed25519 key read from `APPLECRAP_SIGNING_KEY` or
 `~/.applecrap/release-signing-key.pem`; upload the `.zip.sig` beside the zip, or the app won't
-auto-install the update. Twitch sign-in needs the app's Twitch client ID (a public value), built in
+auto-install the update. The packaging step then checks the zip exactly as the updater will
+(`npm run verify:release` runs the same check by hand). Twitch sign-in needs the app's Twitch client ID (a public value), built in
 from `src-tauri/src/services/twitch_auth.rs` or the `APPLECRAP_TWITCH_CLIENT_ID` environment variable.
 
 The portable output is created at:
 
 ```text
-release/portable/AppleCrap Alpha.zip
+release/portable/AppleCrap.zip
 ```
+
+To work on the UI without the app, run `npm run dev` and open http://127.0.0.1:1420 in a browser: a
+demo backend fills it with sample data (`?demo=empty`, `?demo=firstrun` and `?demo=alerts` show
+other states).
 
 ## Project Layout
 
-- `src/` - React app, UI, typed Tauri bridge, and client state
+- `src/` - React app: `components/` for the screens, `useAppStore.ts` for client state, `tauri.ts` for the typed bridge to the backend
 - `src-tauri/` - Rust app shell, persistence, Twitch chat, sign-in and Channel Points, Apple Music lookup, the embedded player bridge, and diagnostics
 - `scripts/` - icon and portable packaging helpers
 
 ## Status
 
-AppleCrap Alpha is early software. The core queue workflow is the priority:
+AppleCrap is in beta. The core queue workflow is the priority:
 
 ```text
 Twitch request or redemption -> Apple Music match -> auto-queue (Play Next) -> playback confirmation

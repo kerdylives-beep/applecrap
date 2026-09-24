@@ -10,7 +10,7 @@
 
 use std::{collections::HashMap, thread, time::Duration};
 
-pub const MIXER_DISPLAY_NAME: &str = "AppleCrap Alpha";
+pub const MIXER_DISPLAY_NAME: &str = "AppleCrap";
 
 /// Spawns a background thread that periodically relabels audio sessions
 /// belonging to this process or its descendants (the WebView2 processes).
