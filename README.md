@@ -6,8 +6,8 @@ AppleCrap is a portable Windows app for taking song requests from Twitch chat an
 
 ## Download
 
-- ⬇️ [Download AppleCrap for Windows](https://github.com/kerdylives-beep/applecrap/releases/download/v0.5.0-beta.1/AppleCrap.zip)
-- 📦 Latest portable zip: `v0.5.0-beta.1`
+- ⬇️ [Download AppleCrap for Windows](https://github.com/kerdylives-beep/applecrap/releases/latest/download/AppleCrap.zip)
+- 📦 [All releases and what changed](https://github.com/kerdylives-beep/applecrap/releases)
 - 🪟 Unzip it and run `AppleCrap.exe`. Your settings live in the `data` folder next to it.
 
 **"Windows protected your PC"?** The first time you run it, Windows may show this because the app
