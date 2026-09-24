@@ -36,6 +36,7 @@ fn main() {
             "open_twitch_sign_in_page",
             "sign_out_twitch",
             "dismiss_alert",
+            "report_problem",
         ]),
     ))
     .expect("failed to run tauri-build");

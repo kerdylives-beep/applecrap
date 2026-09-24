@@ -286,3 +286,10 @@ pub async fn dismiss_alert(
 ) -> Result<crate::models::AppState, String> {
     Ok(context.dismiss_alert(&id).await)
 }
+
+#[tauri::command]
+pub async fn report_problem(
+    context: State<'_, Arc<AppContext>>,
+) -> Result<crate::models::CommandResult, String> {
+    Ok(context.report_problem().await)
+}

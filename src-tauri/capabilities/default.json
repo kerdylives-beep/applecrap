@@ -34,6 +34,7 @@
     "allow-cancel-twitch-sign-in",
     "allow-open-twitch-sign-in-page",
     "allow-sign-out-twitch",
-    "allow-dismiss-alert"
+    "allow-dismiss-alert",
+    "allow-report-problem"
   ]
 }

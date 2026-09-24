@@ -1,4 +1,5 @@
 pub mod apple_catalog;
+pub mod crash_report;
 #[cfg(windows)]
 pub mod audio_session;
 pub mod channel_points;

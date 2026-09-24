@@ -58,6 +58,24 @@ pub fn open_twitch_activation(url: &str) -> Result<()> {
         .map_err(|error| anyhow!("unable to open {url}: {error}"))
 }
 
+/// Opens Explorer with `path` selected.
+pub fn reveal_file(path: &Path) -> Result<()> {
+    let mut command = Command::new("explorer.exe");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // Explorer wants the quotes inside the switch, which the standard
+        // argument quoting can't produce.
+        command.raw_arg(format!("/select,\"{}\"", path.display()));
+    }
+    #[cfg(not(windows))]
+    command.arg(path);
+    command
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| anyhow!("unable to reveal {}: {error}", path.display()))
+}
+
 pub fn reveal_directory(path: &Path) -> Result<()> {
     Command::new("explorer.exe")
         .arg(path)

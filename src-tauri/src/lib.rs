@@ -185,8 +185,16 @@ pub fn run() {
             cancel_twitch_sign_in,
             open_twitch_sign_in_page,
             sign_out_twitch,
-            dismiss_alert
+            dismiss_alert,
+            report_problem
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running AppleCrap Alpha");
+        .build(tauri::generate_context!())
+        .expect("error while building AppleCrap")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(context) = app.try_state::<Arc<AppContext>>() {
+                    context.end_session();
+                }
+            }
+        });
 }

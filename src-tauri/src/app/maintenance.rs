@@ -189,6 +189,23 @@ impl AppContext {
         }
     }
 
+    /// Saves a diagnostics bundle and shows it in Explorer, ready to attach
+    /// to the email the UI opens next.
+    pub async fn report_problem(&self) -> CommandResult {
+        match diagnostics::export_bundle(&self.storage.diagnostics_dir, &self.snapshot().await) {
+            Ok(path) => {
+                let _ = window_shell::reveal_file(&path);
+                self.add_log(
+                    LogLevel::Info,
+                    format!("Saved a problem report to {}.", path.display()),
+                )
+                .await;
+                CommandResult::ok(path.display().to_string())
+            }
+            Err(error) => CommandResult::error(format!("Couldn't save the report: {error}")),
+        }
+    }
+
     pub async fn reveal_data_folder(&self) -> CommandResult {
         match window_shell::reveal_directory(&self.storage.data_dir) {
             Ok(_) => CommandResult::ok("Opened the AppleCrap Alpha data folder."),

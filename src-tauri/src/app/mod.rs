@@ -111,11 +111,28 @@ struct RuntimeState {
 impl AppContext {
     pub fn initialize(handle: AppHandle) -> Result<Self> {
         let mut storage = SettingsStore::resolve()?;
+        crate::services::crash_report::install(&storage.data_dir, env!("CARGO_PKG_VERSION"));
+        let previous_session = crate::services::crash_report::begin_session(&storage.data_dir);
         let _ = storage.append_runtime_log(&format!(
-            "[INFO] {} AppleCrap Alpha starting. data_dir={}",
+            "[INFO] {} AppleCrap {} starting. data_dir={}",
             crate::models::now_iso(),
+            env!("CARGO_PKG_VERSION"),
             storage.data_dir.display()
         ));
+        let mut alerts = Vec::new();
+        if previous_session.unclean {
+            let _ = storage.append_runtime_log(&format!(
+                "[WARN] {} The last session didn't close normally.",
+                crate::models::now_iso()
+            ));
+            if let Some(crash) = previous_session.crash {
+                alerts.push(crash_alert(
+                    "last-crash",
+                    "AppleCrap crashed last time",
+                    &crash.message,
+                ));
+            }
+        }
         let persisted = storage.load_persisted_state();
         let _ = storage.save_persisted_state(&persisted);
         // Only offer the legacy Electron import while the app is unconfigured;
@@ -162,7 +179,7 @@ impl AppContext {
                 pending_sign_in: None,
                 auth_error: None,
                 channel_points_status: Default::default(),
-                alerts: Vec::new(),
+                alerts,
             }),
             twitch_connection: Mutex::new(None),
             overlay_task: Mutex::new(None),
@@ -195,6 +212,24 @@ impl AppContext {
                 if let Err(error) = auto_connect_context.connect_bot().await {
                     auto_connect_context
                         .add_log(LogLevel::Error, format!("Auto-connect failed: {error}"))
+                        .await;
+                }
+            }
+        });
+
+        // A panic in a background task stops only that task, so the app
+        // looks fine while something (chat, playback) quietly isn't. Say so.
+        let panic_context = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                if let Some(crash) = crate::services::crash_report::take_runtime_panic() {
+                    panic_context
+                        .raise_alert(crash_alert(
+                            "runtime-panic",
+                            "Part of AppleCrap stopped working",
+                            &crash.message,
+                        ))
                         .await;
                 }
             }
@@ -397,6 +432,26 @@ impl AppContext {
         }
         self.ensure_queue_progress("settings update").await;
         Ok(self.snapshot().await)
+    }
+}
+
+impl AppContext {
+    /// Marks this run as having ended cleanly.
+    pub fn end_session(&self) {
+        crate::services::crash_report::end_session(&self.storage.data_dir);
+    }
+}
+
+fn crash_alert(id: &str, title: &str, message: &str) -> crate::models::Alert {
+    let message: String = message.chars().take(200).collect();
+    crate::models::Alert {
+        id: id.to_string(),
+        tone: crate::models::AlertTone::Error,
+        title: title.to_string(),
+        detail: format!(
+            "{message}. Restarting usually gets things going again; sending a report helps get it fixed."
+        ),
+        action: Some(crate::models::AlertAction::ReportProblem),
     }
 }
 
