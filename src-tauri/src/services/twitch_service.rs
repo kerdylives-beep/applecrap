@@ -629,6 +629,17 @@ async fn handle_chat_command(context: &Arc<AppContext>, message: &ChatMessage) -
     // it at one of the built-in names below (e.g. sets !song as their request
     // command) — check it first so it never gets shadowed.
     if !request_command.is_empty() && command == request_command {
+        let points = &settings.channel_points;
+        if points.enabled
+            && points.points_only
+            && !message.is_mod_or_broadcaster
+            && context.channel_points_live().await
+        {
+            return Some(format!(
+                "Song requests use Channel Points now: redeem \"{}\".",
+                points.title
+            ));
+        }
         let is_privileged =
             message.is_mod_or_broadcaster && settings.request_limits.mods_bypass_limits;
         let result = context

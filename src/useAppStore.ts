@@ -73,6 +73,12 @@ const defaultSettings: AppSettings = {
     showQueue: true,
     queueCount: 3,
   },
+  channelPoints: {
+    enabled: false,
+    title: 'Request a song',
+    cost: 500,
+    pointsOnly: false,
+  },
 }
 
 export function useAppStore() {
@@ -216,7 +222,14 @@ export function useAppStore() {
       return value
     } catch (error) {
       console.error(error)
-      setNotice(error instanceof Error ? error.message : 'The action failed.')
+      // Tauri commands reject with the backend's message as a plain string.
+      setNotice(
+        typeof error === 'string' && error
+          ? error
+          : error instanceof Error
+            ? error.message
+            : 'The action failed.',
+      )
       return undefined
     } finally {
       setBusyAction(null)

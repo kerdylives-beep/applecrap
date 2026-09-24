@@ -208,6 +208,63 @@ pub struct AppSettings {
     pub player: PlayerSettings,
     #[serde(default)]
     pub overlay: OverlaySettings,
+    #[serde(default)]
+    pub channel_points: ChannelPointsSettings,
+}
+
+/// Song requests redeemed with Channel Points. The app creates and owns the
+/// reward on the broadcaster's channel (Twitch only lets the app that created
+/// a reward manage its redemptions).
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ChannelPointsSettings {
+    pub enabled: bool,
+    pub title: String,
+    pub cost: u32,
+    /// Take requests only through Channel Points; `!request` then points
+    /// viewers at the reward (mods can still use it).
+    pub points_only: bool,
+}
+
+pub const DEFAULT_REWARD_TITLE: &str = "Request a song";
+/// Twitch's limit on reward titles.
+pub const MAX_REWARD_TITLE_CHARS: usize = 45;
+
+impl Default for ChannelPointsSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            title: DEFAULT_REWARD_TITLE.to_string(),
+            cost: 500,
+            points_only: false,
+        }
+    }
+}
+
+/// The reward this app created, remembered so it is updated rather than
+/// duplicated. Tied to the broadcaster account that owns it.
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelPointsState {
+    pub reward_id: Option<String>,
+    pub broadcaster_id: Option<String>,
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ChannelPointsPhase {
+    #[default]
+    Off,
+    Starting,
+    Live,
+    Error,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelPointsStatus {
+    pub phase: ChannelPointsPhase,
+    pub detail: String,
 }
 
 /// What the overlay page renders. Built fresh per request; the overlay polls.
@@ -415,6 +472,8 @@ pub struct PersistedState {
     /// included in `AppState`, so they never reach the UI.
     #[serde(default)]
     pub auth: AuthState,
+    #[serde(default)]
+    pub channel_points: ChannelPointsState,
 }
 
 /// Which signed-in Twitch account something belongs to.
@@ -517,6 +576,7 @@ pub struct AppState {
     pub stats: AppStats,
     pub update: Option<UpdateInfo>,
     pub auth: AuthSummary,
+    pub channel_points: ChannelPointsStatus,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -575,6 +635,16 @@ pub struct SaveSettingsPayload {
     pub apple_music: Option<AppleMusicSettingsPatch>,
     pub player: Option<PlayerSettingsPatch>,
     pub overlay: Option<OverlaySettingsPatch>,
+    pub channel_points: Option<ChannelPointsSettingsPatch>,
+}
+
+#[derive(Clone, Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelPointsSettingsPatch {
+    pub enabled: Option<bool>,
+    pub title: Option<String>,
+    pub cost: Option<u32>,
+    pub points_only: Option<bool>,
 }
 
 #[derive(Clone, Deserialize, Debug, Default)]
@@ -713,10 +783,33 @@ impl AppSettings {
             }
         }
 
+        if let Some(channel_points) = patch.channel_points {
+            if let Some(enabled) = channel_points.enabled {
+                self.channel_points.enabled = enabled;
+            }
+            if let Some(title) = channel_points.title {
+                self.channel_points.title = title;
+            }
+            if let Some(cost) = channel_points.cost {
+                self.channel_points.cost = cost;
+            }
+            if let Some(points_only) = channel_points.points_only {
+                self.channel_points.points_only = points_only;
+            }
+        }
+
         self.normalize();
     }
 
     pub fn normalize(&mut self) {
+        let title = self.channel_points.title.trim();
+        self.channel_points.title = if title.is_empty() {
+            DEFAULT_REWARD_TITLE.to_string()
+        } else {
+            title.chars().take(MAX_REWARD_TITLE_CHARS).collect()
+        };
+        self.channel_points.cost = self.channel_points.cost.clamp(1, 10_000_000);
+
         self.twitch.channel = self
             .twitch
             .channel

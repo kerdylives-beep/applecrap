@@ -1,7 +1,9 @@
 pub mod apple_catalog;
 #[cfg(windows)]
 pub mod audio_session;
+pub mod channel_points;
 pub mod diagnostics;
+pub mod eventsub;
 pub mod irc;
 pub mod overlay_server;
 pub mod player_bridge;

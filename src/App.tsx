@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import faviconUrl from '../img/favicon.ico'
 import styles from './App.module.css'
 import { useAppStore } from './useAppStore'
-import type { AuthSlot, AuthSummary, LogEntry, LogLevel, PanelKey, QueueItem } from './types'
+import type { AppSettings, AuthSlot, AuthSummary, ChannelPointsStatus, LogEntry, LogLevel, PanelKey, QueueItem } from './types'
 import {
   clampText,
   emptyStateMessage,
@@ -281,6 +281,67 @@ function TwitchAccounts({
           </article>
         )
       })}
+    </div>
+  )
+}
+
+const CHANNEL_POINTS_PHASE_LABEL: Record<ChannelPointsStatus['phase'], string> = {
+  off: 'Off',
+  starting: 'Starting',
+  live: 'Live',
+  error: 'Needs attention',
+}
+
+function ChannelPointsSettings({
+  draft,
+  status,
+  broadcaster,
+  onChange,
+}: {
+  draft: AppSettings['channelPoints']
+  status: ChannelPointsStatus
+  broadcaster: string | null
+  onChange: (patch: Partial<AppSettings['channelPoints']>) => void
+}) {
+  return (
+    <div className={styles.toggleStack}>
+      <label className={styles.toggleLabel}>
+        <input type="checkbox" checked={draft.enabled} onChange={(event) => onChange({ enabled: event.target.checked })} />
+        Take song requests through Channel Points
+      </label>
+      {draft.enabled || status.phase !== 'off' ? (
+        <div className={cx(styles.noticeStrip, status.phase === 'error' && styles.noticeStripWarn)}>
+          <strong>Channel Points: {CHANNEL_POINTS_PHASE_LABEL[status.phase]}</strong>
+          <span>
+            {status.detail ||
+              (broadcaster
+                ? 'Save to create the reward on your channel.'
+                : 'Sign in as your channel above first.')}
+          </span>
+        </div>
+      ) : (
+        <span className={styles.emptyCopy}>
+          Needs a Twitch Affiliate or Partner channel. The app creates the reward on your channel, queues each redemption, and refunds the points if a request can't be queued. Turning this off hides the reward.
+        </span>
+      )}
+      {draft.enabled ? (
+        <>
+          <div className={styles.formGrid}>
+            <label>
+              Reward name
+              <input value={draft.title} maxLength={45} onChange={(event) => onChange({ title: event.target.value })} placeholder="Request a song" />
+            </label>
+            <label>
+              Cost (points)
+              <input type="number" min={1} value={draft.cost} onChange={(event) => onChange({ cost: Number(event.target.value) })} />
+            </label>
+          </div>
+          <label className={styles.toggleLabel}>
+            <input type="checkbox" checked={draft.pointsOnly} onChange={(event) => onChange({ pointsOnly: event.target.checked })} />
+            Only take requests through Channel Points (mods can still use the chat command)
+          </label>
+        </>
+      ) : null}
     </div>
   )
 }
@@ -760,6 +821,14 @@ function App() {
             onCancel={store.abortTwitchSignIn}
             onSignOut={store.signOutOfTwitch}
           />
+          {state.auth.available ? (
+            <ChannelPointsSettings
+              draft={store.settingsDraft.channelPoints}
+              status={state.channelPoints}
+              broadcaster={state.auth.broadcaster?.login ?? null}
+              onChange={(patch) => store.updateDraft('channelPoints', patch)}
+            />
+          ) : null}
           <div className={styles.formGrid}>
             <label>
               Twitch channel

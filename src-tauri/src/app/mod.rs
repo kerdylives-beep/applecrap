@@ -37,6 +37,7 @@ use crate::{
 };
 
 mod auth;
+mod channel_points;
 mod maintenance;
 mod overlay;
 mod playback;
@@ -69,6 +70,14 @@ pub struct AppContext {
     auth_refresh_lock: Mutex<()>,
     /// The background poll for an in-progress device-code sign-in.
     sign_in_task: Mutex<Option<JoinHandle<()>>>,
+    /// Serializes Channel Points reward setup.
+    channel_points_sync: Mutex<()>,
+    /// The redemption listener, with the reward id it listens to.
+    channel_points_listener: Mutex<Option<(String, JoinHandle<()>)>>,
+    /// A pending retry of Channel Points setup after a network failure.
+    channel_points_retry: Mutex<Option<JoinHandle<()>>>,
+    /// Recently handled redemption ids (see `first_sighting`).
+    seen_redemptions: std::sync::Mutex<std::collections::VecDeque<String>>,
 }
 
 struct TwitchConnection {
@@ -95,6 +104,7 @@ struct RuntimeState {
     now_playing_request: Option<QueueItem>,
     pending_sign_in: Option<crate::models::PendingSignIn>,
     auth_error: Option<String>,
+    channel_points_status: crate::models::ChannelPointsStatus,
 }
 
 impl AppContext {
@@ -150,11 +160,16 @@ impl AppContext {
                 now_playing_request: None,
                 pending_sign_in: None,
                 auth_error: None,
+                channel_points_status: Default::default(),
             }),
             twitch_connection: Mutex::new(None),
             overlay_task: Mutex::new(None),
             auth_refresh_lock: Mutex::new(()),
             sign_in_task: Mutex::new(None),
+            channel_points_sync: Mutex::new(()),
+            channel_points_listener: Mutex::new(None),
+            channel_points_retry: Mutex::new(None),
+            seen_redemptions: std::sync::Mutex::new(Default::default()),
         })
     }
 
@@ -192,6 +207,11 @@ impl AppContext {
         let overlay_context = Arc::clone(self);
         tauri::async_runtime::spawn(async move {
             overlay_context.sync_overlay_server().await;
+        });
+
+        let channel_points_context = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            channel_points_context.sync_channel_points().await;
         });
 
         // Twitch requires validating signed-in tokens at startup and hourly.
@@ -258,6 +278,7 @@ impl AppContext {
             storage: self.storage.storage.clone(),
             update: runtime.update.clone(),
             auth: self.auth_summary(&persisted, &runtime),
+            channel_points: runtime.channel_points_status.clone(),
             stats: AppStats {
                 total_requests: persisted.queue.len(),
                 unresolved_requests: persisted
@@ -344,17 +365,33 @@ impl AppContext {
     }
 
     pub async fn save_settings(self: &Arc<Self>, payload: SaveSettingsPayload) -> Result<AppState> {
-        {
+        let channel_points_changed = {
             // Merge under the write lock. Reading, merging, then writing in a
             // separate step let two quick changes (say, two toggles flipped in
             // a row) both start from the same copy, and one of them was lost.
             let mut persisted = self.persisted.write().await;
+            let before = (
+                persisted.settings.channel_points.clone(),
+                persisted.settings.request_limits.allow_links,
+            );
             persisted.settings.merge_patch(payload);
-        }
+            before
+                != (
+                    persisted.settings.channel_points.clone(),
+                    persisted.settings.request_limits.allow_links,
+                )
+        };
 
         self.save_persisted().await?;
         self.emit_state().await;
         self.sync_overlay_server().await;
+        if channel_points_changed {
+            // Talks to Twitch, so don't hold up the save on it.
+            let context = Arc::clone(self);
+            tauri::async_runtime::spawn(async move {
+                context.sync_channel_points().await;
+            });
+        }
         self.ensure_queue_progress("settings update").await;
         Ok(self.snapshot().await)
     }

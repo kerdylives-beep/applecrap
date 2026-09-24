@@ -257,6 +257,7 @@ impl SettingsStore {
             queue,
             logs,
             auth: Default::default(),
+            channel_points: Default::default(),
         }))
     }
 }
@@ -393,6 +394,7 @@ impl LegacySettings {
             apple_music: self.apple_music.into_current(),
             player: Default::default(),
             overlay: Default::default(),
+            channel_points: Default::default(),
         }
     }
 }

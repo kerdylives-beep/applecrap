@@ -138,6 +138,9 @@ impl AppContext {
         if reconnect_chat {
             let _ = self.connect_bot().await;
         }
+        if slot == AuthSlot::Broadcaster {
+            self.sync_channel_points().await;
+        }
         Ok(())
     }
 
@@ -166,6 +169,9 @@ impl AppContext {
     }
 
     pub async fn sign_out(self: &Arc<Self>, slot: AuthSlot) -> Result<AppState> {
+        if slot == AuthSlot::Broadcaster {
+            self.retire_channel_points().await;
+        }
         let removed = {
             let _turn = self.auth_refresh_lock.lock().await;
             self.persisted.write().await.auth.slot_mut(slot).take()
@@ -200,6 +206,9 @@ impl AppContext {
             } else {
                 let _ = self.disconnect_bot().await;
             }
+        }
+        if slot == AuthSlot::Broadcaster {
+            self.sync_channel_points().await;
         }
         self.emit_state().await;
         Ok(self.snapshot().await)

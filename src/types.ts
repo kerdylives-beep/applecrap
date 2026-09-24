@@ -77,6 +77,17 @@ export type AppSettings = {
     showQueue: boolean
     queueCount: number
   }
+  channelPoints: {
+    enabled: boolean
+    title: string
+    cost: number
+    pointsOnly: boolean
+  }
+}
+
+export type ChannelPointsStatus = {
+  phase: 'off' | 'starting' | 'live' | 'error'
+  detail: string
 }
 
 export type AudioOutputDevice = {
@@ -194,6 +205,7 @@ export type AppState = {
   stats: AppStats
   update?: UpdateInfo | null
   auth: AuthSummary
+  channelPoints: ChannelPointsStatus
 }
 
 export type ManualRequestPayload = {
@@ -206,6 +218,8 @@ export type SaveSettingsPayload = {
   requestLimits?: Partial<AppSettings['requestLimits']>
   appleMusic?: Partial<AppSettings['appleMusic']>
   player?: Partial<AppSettings['player']>
+  overlay?: Partial<AppSettings['overlay']>
+  channelPoints?: Partial<AppSettings['channelPoints']>
 }
 
 export type CommandResult = {

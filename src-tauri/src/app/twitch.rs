@@ -43,8 +43,6 @@ impl AppContext {
         }
     }
 
-    /// The account the chat bot logs in as, resolved fresh for every
-    /// connection attempt.
     /// The signed-in account chat uses: the bot account first, then the
     /// broadcaster. `None` means a pasted legacy token (if any) is used.
     async fn chat_account(&self) -> Option<(AuthSlot, String)> {
