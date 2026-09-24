@@ -19,7 +19,7 @@ use crate::models::AuthSlot;
 /// Client ID of the AppleCrap application registered at
 /// dev.twitch.tv/console (client type: Public). It is not a secret.
 /// A build can also supply one via the APPLECRAP_TWITCH_CLIENT_ID env var.
-const CLIENT_ID: &str = "";
+const CLIENT_ID: &str = "jjnrf97l1twk6ebnlgih5mvgpbsx9d";
 
 const DEVICE_URL: &str = "https://id.twitch.tv/oauth2/device";
 const TOKEN_URL: &str = "https://id.twitch.tv/oauth2/token";
