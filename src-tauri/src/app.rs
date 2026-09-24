@@ -65,7 +65,7 @@ struct RuntimeState {
 
 impl AppContext {
     pub fn initialize(handle: AppHandle) -> Result<Self> {
-        let storage = SettingsStore::resolve()?;
+        let mut storage = SettingsStore::resolve()?;
         let _ = storage.append_runtime_log(&format!(
             "[INFO] {} AppleCrap Alpha starting. data_dir={}",
             crate::models::now_iso(),

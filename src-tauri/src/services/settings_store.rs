@@ -58,27 +58,69 @@ impl SettingsStore {
         })
     }
 
-    pub fn load_persisted_state(&self) -> PersistedState {
+    fn backup_file(&self) -> PathBuf {
+        self.state_file.with_extension("json.bak")
+    }
+
+    /// Loads persisted state, recovering from a damaged file instead of
+    /// silently resetting.
+    ///
+    /// A damaged `state.json` is moved aside (never overwritten, so it can
+    /// still be recovered by hand), the last known-good backup is tried, and
+    /// the outcome is surfaced through `storage.warning` so the user is told
+    /// rather than finding their bot setup quietly gone.
+    pub fn load_persisted_state(&mut self) -> PersistedState {
         if !self.state_file.exists() {
             return PersistedState::default();
         }
 
-        match fs::read_to_string(&self.state_file)
-            .ok()
-            .and_then(|contents| serde_json::from_str::<PersistedState>(&contents).ok())
-        {
-            Some(mut state) => {
-                state.settings.normalize();
-                state.logs = sanitize_logs(state.logs, 120);
-                state
-            }
-            None => PersistedState::default(),
+        if let Some(state) = read_state_file(&self.state_file) {
+            // Known-good: refresh the backup used for recovery next time.
+            let _ = fs::copy(&self.state_file, self.backup_file());
+            return state;
         }
+
+        let preserved = self.data_dir.join(format!(
+            "state.corrupt-{}.json",
+            chrono::Utc::now().format("%Y%m%d-%H%M%S")
+        ));
+        let preserved_note = match fs::rename(&self.state_file, &preserved) {
+            Ok(()) => format!(" The damaged file was kept as {}.", preserved.display()),
+            Err(_) => String::new(),
+        };
+
+        let (state, message) = match read_state_file(&self.backup_file()) {
+            Some(state) => (
+                state,
+                format!("Your settings file was damaged, so AppleCrap restored the last good backup.{preserved_note}"),
+            ),
+            None => (
+                PersistedState::default(),
+                format!("Your settings file was damaged and no backup was available, so AppleCrap started with default settings.{preserved_note}"),
+            ),
+        };
+
+        self.storage.warning = Some(match self.storage.warning.take() {
+            Some(existing) => format!("{existing} {message}"),
+            None => message,
+        });
+        state
     }
 
+    /// Writes state atomically: a temp file is written and flushed to disk,
+    /// then renamed over the real file (an atomic replace on NTFS). A crash
+    /// mid-save leaves either the old file or the new one — never a truncated
+    /// mix, which previously wiped every setting on the next launch.
     pub fn save_persisted_state(&self, state: &PersistedState) -> Result<()> {
         fs::create_dir_all(&self.data_dir)?;
-        fs::write(&self.state_file, serde_json::to_vec_pretty(state)?)?;
+        let bytes = serde_json::to_vec_pretty(state)?;
+        let temp = self.state_file.with_extension("json.tmp");
+        {
+            let mut file = fs::File::create(&temp)?;
+            file.write_all(&bytes)?;
+            file.sync_all()?;
+        }
+        fs::rename(&temp, &self.state_file)?;
         Ok(())
     }
 
@@ -146,6 +188,15 @@ impl SettingsStore {
             logs,
         }))
     }
+}
+
+/// Parses a state file, returning `None` if it is missing or unreadable.
+fn read_state_file(path: &Path) -> Option<PersistedState> {
+    let contents = fs::read_to_string(path).ok()?;
+    let mut state = serde_json::from_str::<PersistedState>(&contents).ok()?;
+    state.settings.normalize();
+    state.logs = sanitize_logs(state.logs, 120);
+    Some(state)
 }
 
 fn sanitize_logs(logs: Vec<LogEntry>, max_entries: usize) -> Vec<LogEntry> {
@@ -353,5 +404,76 @@ impl LegacyLogEntry {
             message: self.message,
             timestamp: self.timestamp,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_store(name: &str) -> SettingsStore {
+        let dir = std::env::temp_dir().join(format!(
+            "applecrap-store-{name}-{}",
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        SettingsStore {
+            state_file: dir.join("state.json"),
+            runtime_log_file: dir.join("runtime.log"),
+            diagnostics_dir: dir.clone(),
+            storage: StorageInfo::default(),
+            data_dir: dir,
+        }
+    }
+
+    fn configured_state() -> PersistedState {
+        let mut state = PersistedState::default();
+        state.settings.twitch.channel = "kerdylives".to_string();
+        state.settings.twitch.bot_username = "kerdyknives".to_string();
+        state
+    }
+
+    #[test]
+    fn save_is_atomic_and_round_trips() {
+        let mut store = temp_store("roundtrip");
+        store.save_persisted_state(&configured_state()).unwrap();
+
+        assert!(!store.state_file.with_extension("json.tmp").exists());
+        let loaded = store.load_persisted_state();
+        assert_eq!(loaded.settings.twitch.channel, "kerdylives");
+        assert!(store.storage.warning.is_none());
+    }
+
+    // Regression: a truncated state.json used to silently reset every setting
+    // and was then overwritten with defaults, destroying any chance of recovery.
+    #[test]
+    fn damaged_state_recovers_from_backup_and_is_preserved() {
+        let mut store = temp_store("recover");
+        store.save_persisted_state(&configured_state()).unwrap();
+        // A clean load refreshes the backup.
+        let _ = store.load_persisted_state();
+
+        fs::write(&store.state_file, b"{\"settings\": {\"twitch\": ").unwrap();
+        let loaded = store.load_persisted_state();
+
+        assert_eq!(loaded.settings.twitch.channel, "kerdylives");
+        assert!(store.storage.warning.as_deref().unwrap().contains("restored the last good backup"));
+        let preserved = fs::read_dir(&store.data_dir)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .any(|entry| entry.file_name().to_string_lossy().starts_with("state.corrupt-"));
+        assert!(preserved, "damaged file must be kept for manual recovery");
+    }
+
+    #[test]
+    fn damaged_state_without_backup_warns_instead_of_silently_resetting() {
+        let mut store = temp_store("nobackup");
+        fs::write(&store.state_file, b"not json at all").unwrap();
+
+        let loaded = store.load_persisted_state();
+
+        assert!(loaded.settings.twitch.channel.is_empty());
+        assert!(store.storage.warning.as_deref().unwrap().contains("no backup was available"));
+        assert!(!store.state_file.exists(), "damaged file must be moved aside, not left to be overwritten");
     }
 }

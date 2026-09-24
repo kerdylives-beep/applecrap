@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use tokio::{
@@ -11,7 +11,7 @@ use tokio_native_tls::{native_tls, TlsConnector};
 use crate::{
     app::AppContext,
     models::{normalize_twitch_oauth_token, AppSettings, BotConnectionState, LogLevel, ProbeSnapshot},
-    services::queue_engine,
+    services::{irc, queue_engine},
 };
 
 pub async fn connect(context: Arc<AppContext>) -> Result<()> {
@@ -167,12 +167,20 @@ async fn handle_irc_line(
     writer_tx: &mpsc::UnboundedSender<String>,
     line: &str,
 ) -> Result<()> {
-    if let Some(ping_payload) = line.strip_prefix("PING :") {
-        let _ = writer_tx.send(format!("PONG :{}\r\n", ping_payload));
+    // Branch on the parsed command only. Chat text is viewer-controlled, so
+    // substring checks on the raw line let a viewer impersonate server
+    // messages (typing an auth-failure NOTICE used to disconnect the bot).
+    let Some(parsed) = irc::parse(line) else {
+        return Ok(());
+    };
+
+    if parsed.command == "PING" {
+        let payload = parsed.trailing().unwrap_or("tmi.twitch.tv");
+        let _ = writer_tx.send(format!("PONG :{}\r\n", sanitize_irc_text(payload)));
         return Ok(());
     }
 
-    if line.contains(" 001 ") {
+    if parsed.command == "001" {
         let request_command = context.current_settings().await.twitch.request_command;
         context
             .update_bot_status(
@@ -194,17 +202,24 @@ async fn handle_irc_line(
         return Ok(());
     }
 
-    if line.contains("NOTICE * :Login authentication failed") {
-        anyhow::bail!("Twitch login failed. Check the bot username and OAuth token.");
+    if parsed.command == "NOTICE" {
+        // Server notices addressed to `*` are pre-login; only those can mean
+        // our credentials were rejected.
+        if parsed.params.first().map(String::as_str) == Some("*") {
+            let text = parsed.trailing().unwrap_or_default();
+            if text.contains("Login authentication failed") {
+                anyhow::bail!("Twitch login failed. Check the bot username and OAuth token.");
+            }
+            if text.contains("Improperly formatted auth") {
+                anyhow::bail!(
+                    "Twitch rejected the auth format. The token should come from a bot account and start with oauth:."
+                );
+            }
+        }
+        return Ok(());
     }
 
-    if line.contains("NOTICE * :Improperly formatted auth") {
-        anyhow::bail!(
-            "Twitch rejected the auth format. The token should come from a bot account and start with oauth:."
-        );
-    }
-
-    let Some(message) = parse_privmsg(line) else {
+    let Some(message) = privmsg_from(&parsed) else {
         return Ok(());
     };
 
@@ -406,61 +421,44 @@ struct ParsedMessage {
     is_mod_or_broadcaster: bool,
 }
 
-fn parse_privmsg(line: &str) -> Option<ParsedMessage> {
-    let (tags_part, rest) = if let Some(stripped) = line.strip_prefix('@') {
-        let split_index = stripped.find(' ')?;
-        (&stripped[..split_index], &stripped[split_index + 1..])
-    } else {
-        ("", line)
-    };
-
-    if !rest.contains(" PRIVMSG ") {
+fn privmsg_from(parsed: &irc::IrcMessage) -> Option<ParsedMessage> {
+    if parsed.command != "PRIVMSG" || parsed.params.len() < 2 {
         return None;
     }
 
-    let trailing_index = rest.find(" :")?;
-    let leading = &rest[..trailing_index];
-    let message = &rest[trailing_index + 2..];
-    let channel = leading
-        .split_whitespace()
-        .nth(2)?
-        .trim_start_matches('#')
-        .to_string();
-    let login = rest
-        .split_whitespace()
-        .next()
-        .unwrap_or(":viewer")
-        .trim_start_matches(':')
-        .split('!')
-        .next()
-        .unwrap_or("viewer")
-        .to_string();
-    let tags = parse_tags(tags_part);
-    let display_name = tags
-        .get("display-name")
-        .cloned()
+    let channel = parsed.params[0].trim_start_matches('#').to_string();
+    let message = parsed.trailing()?.to_string();
+    let login = parsed.nick()?.to_string();
+    let display_name = parsed
+        .tag("display-name")
         .filter(|name| !name.is_empty())
+        .map(str::to_string)
         .unwrap_or_else(|| login.clone());
-    let is_mod_or_broadcaster = tags.get("mod").map(|value| value == "1").unwrap_or(false)
-        || tags
-            .get("badges")
-            .map(|value| value.contains("broadcaster/1"))
+    let is_mod_or_broadcaster = parsed.tag("mod") == Some("1")
+        || parsed
+            .tag("badges")
+            .map(|badges| badges.split(',').any(|badge| badge == "broadcaster/1"))
             .unwrap_or(false);
 
     Some(ParsedMessage {
         channel,
         login,
         display_name,
-        message: message.to_string(),
+        message,
         is_mod_or_broadcaster,
     })
 }
 
-fn parse_tags(input: &str) -> HashMap<String, String> {
-    input
-        .split(';')
-        .filter_map(|entry| entry.split_once('='))
-        .map(|(key, value)| (key.to_string(), value.to_string()))
+#[cfg(test)]
+fn parse_privmsg(line: &str) -> Option<ParsedMessage> {
+    irc::parse(line).as_ref().and_then(privmsg_from)
+}
+
+/// Strips line breaks so text echoed into chat (song titles, queries) can
+/// never terminate the IRC line and smuggle in a second command.
+fn sanitize_irc_text(text: &str) -> String {
+    text.chars()
+        .map(|ch| if ch == '\r' || ch == '\n' { ' ' } else { ch })
         .collect()
 }
 
