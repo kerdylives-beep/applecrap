@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event'
 import type {
   ApproveRequestPayload,
   AppState,
+  AuthSlot,
   CommandResult,
   LogEntry,
   ManualRequestPayload,
@@ -32,6 +33,22 @@ export async function connectBot() {
 
 export async function disconnectBot() {
   return invoke<AppState>('disconnect_bot')
+}
+
+export async function beginTwitchSignIn(slot: AuthSlot) {
+  return invoke<AppState>('begin_twitch_sign_in', { slot })
+}
+
+export async function cancelTwitchSignIn() {
+  return invoke<AppState>('cancel_twitch_sign_in')
+}
+
+export async function openTwitchSignInPage() {
+  return invoke<CommandResult>('open_twitch_sign_in_page')
+}
+
+export async function signOutTwitch(slot: AuthSlot) {
+  return invoke<AppState>('sign_out_twitch', { slot })
 }
 
 export async function enqueueManualRequest(payload: ManualRequestPayload) {

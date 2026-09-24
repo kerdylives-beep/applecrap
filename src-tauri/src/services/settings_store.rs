@@ -256,6 +256,7 @@ impl SettingsStore {
             settings,
             queue,
             logs,
+            auth: Default::default(),
         }))
     }
 }
@@ -276,6 +277,13 @@ fn read_state_file(path: &Path) -> Option<(PersistedState, bool)> {
 fn protect_secrets(state: &mut PersistedState) {
     let token = &mut state.settings.twitch.oauth_token;
     *token = secret_store::protect(token);
+    for account in [&mut state.auth.bot, &mut state.auth.broadcaster]
+        .into_iter()
+        .flatten()
+    {
+        account.access_token = secret_store::protect(&account.access_token);
+        account.refresh_token = secret_store::protect(&account.refresh_token);
+    }
 }
 
 /// Decrypts credential fields in place. A field that cannot be decrypted is
@@ -288,6 +296,26 @@ fn reveal_secrets(state: &mut PersistedState) -> bool {
         Err(_) => {
             token.clear();
             all_readable = false;
+        }
+    }
+
+    for account in [&mut state.auth.bot, &mut state.auth.broadcaster] {
+        let Some(signed_in) = account.as_mut() else {
+            continue;
+        };
+        let access = secret_store::unprotect(&signed_in.access_token);
+        let refresh = secret_store::unprotect(&signed_in.refresh_token);
+        match (access, refresh) {
+            (Ok(access), Ok(refresh)) => {
+                signed_in.access_token = access;
+                signed_in.refresh_token = refresh;
+            }
+            // Half a credential is useless; drop the account so the UI asks
+            // for a fresh sign-in instead of failing on every request.
+            _ => {
+                *account = None;
+                all_readable = false;
+            }
         }
     }
     all_readable

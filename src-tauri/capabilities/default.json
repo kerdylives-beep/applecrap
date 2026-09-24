@@ -29,6 +29,10 @@
     "allow-open-overlay-preview",
     "allow-install-update",
     "allow-player-show",
-    "allow-player-hide"
+    "allow-player-hide",
+    "allow-begin-twitch-sign-in",
+    "allow-cancel-twitch-sign-in",
+    "allow-open-twitch-sign-in-page",
+    "allow-sign-out-twitch"
   ]
 }

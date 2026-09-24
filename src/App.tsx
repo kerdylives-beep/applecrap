@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import faviconUrl from '../img/favicon.ico'
 import styles from './App.module.css'
 import { useAppStore } from './useAppStore'
-import type { LogEntry, LogLevel, PanelKey, QueueItem } from './types'
+import type { AuthSlot, AuthSummary, LogEntry, LogLevel, PanelKey, QueueItem } from './types'
 import {
   clampText,
   emptyStateMessage,
@@ -205,9 +205,90 @@ function ModalShell({
   )
 }
 
+const AUTH_SLOTS: Array<{ slot: AuthSlot; title: string; hint: string }> = [
+  {
+    slot: 'broadcaster',
+    title: 'Your channel',
+    hint: 'Sign in as the streamer. Needed for Channel Points requests; also chats if there is no bot account.',
+  },
+  {
+    slot: 'bot',
+    title: 'Bot account (optional)',
+    hint: 'A separate account for the bot to chat as. Leave empty to chat as your channel.',
+  },
+]
+
+function TwitchAccounts({
+  auth,
+  busy,
+  onSignIn,
+  onOpenPage,
+  onCancel,
+  onSignOut,
+}: {
+  auth: AuthSummary
+  busy: boolean
+  onSignIn: (slot: AuthSlot) => void
+  onOpenPage: () => void
+  onCancel: () => void
+  onSignOut: (slot: AuthSlot) => void
+}) {
+  if (!auth.available) {
+    return null
+  }
+
+  const pending = auth.pending
+  return (
+    <div className={styles.toggleStack}>
+      {auth.error ? (
+        <div className={cx(styles.noticeStrip, styles.noticeStripWarn)}>
+          <span>{auth.error}</span>
+        </div>
+      ) : null}
+      {pending ? (
+        <div className={styles.noticeStrip}>
+          <strong>
+            Enter this code at twitch.tv/activate: <span style={{ fontSize: '1.35rem', letterSpacing: '0.12em', color: 'var(--text-primary)' }}>{pending.userCode}</span>
+          </strong>
+          <span>Signing in as {pending.slot === 'bot' ? 'the bot account' : 'your channel'}. This finishes on its own once you approve it on Twitch.</span>
+          <div className={styles.inlineButtons}>
+            <button className={styles.secondaryButton} onClick={onOpenPage}>
+              Open Twitch
+            </button>
+            <button className={styles.ghostButton} onClick={onCancel}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {AUTH_SLOTS.map(({ slot, title, hint }) => {
+        const account = auth[slot]
+        return (
+          <article className={styles.sessionCard} key={slot}>
+            <strong>{title}</strong>
+            <span>{account ? `Signed in as @${account.login}` : hint}</span>
+            <div className={styles.inlineButtons}>
+              {account ? (
+                <button className={styles.ghostButton} disabled={busy} onClick={() => onSignOut(slot)}>
+                  Sign out
+                </button>
+              ) : (
+                <button className={styles.secondaryButton} disabled={busy || Boolean(pending)} onClick={() => onSignIn(slot)}>
+                  Sign in with Twitch
+                </button>
+              )}
+            </div>
+          </article>
+        )
+      })}
+    </div>
+  )
+}
+
 function App() {
   const store = useAppStore()
   const [logFilter, setLogFilter] = useState<LogFilter>('all')
+  const [legacyTokenOpen, setLegacyTokenOpen] = useState(false)
   const deferredLogFilter = useDeferredValue(logFilter)
   const state = store.state
 
@@ -248,6 +329,12 @@ function App() {
     !['sent-to-player', 'confirmed-playing'].includes(featuredRequest?.handoffState ?? '')
 
   const requestLinksLabel = state.settings.requestLimits.allowLinks ? 'Allowed' : 'Blocked'
+  const signedIn = Boolean(state.auth.bot || state.auth.broadcaster)
+  // The pasted-token fields stay for builds without Twitch sign-in and for
+  // setups that already use one; otherwise they hide behind a checkbox.
+  const showLegacyToken =
+    !state.auth.available ||
+    (!signedIn && (legacyTokenOpen || Boolean(state.settings.twitch.oauthToken)))
   const degradedNotices = [
     state.storage.warning,
     state.legacyImport.available ? 'Legacy Electron data found. Import it once to migrate settings, queue, and logs.' : null,
@@ -665,6 +752,14 @@ function App() {
             <Pill label="Channel" value={state.botStatus.channel || state.settings.twitch.channel || 'Not configured'} />
             <Pill label="Links" value={requestLinksLabel} tone={state.settings.requestLimits.allowLinks ? 'good' : 'warn'} />
           </div>
+          <TwitchAccounts
+            auth={state.auth}
+            busy={Boolean(store.busyAction)}
+            onSignIn={store.startTwitchSignIn}
+            onOpenPage={store.reopenTwitchSignInPage}
+            onCancel={store.abortTwitchSignIn}
+            onSignOut={store.signOutOfTwitch}
+          />
           <div className={styles.formGrid}>
             <label>
               Twitch channel
@@ -674,14 +769,18 @@ function App() {
               Request command
               <input value={store.settingsDraft.twitch.requestCommand} onChange={(event) => store.updateDraft('twitch', { requestCommand: event.target.value || '!request' })} placeholder="!request" />
             </label>
-            <label>
-              Bot username
-              <input value={store.settingsDraft.twitch.botUsername} onChange={(event) => store.updateDraft('twitch', { botUsername: event.target.value })} placeholder="requestbot" />
-            </label>
-            <label>
-              OAuth token
-              <input type="password" value={store.settingsDraft.twitch.oauthToken} onChange={(event) => store.updateDraft('twitch', { oauthToken: event.target.value })} placeholder="oauth:..." />
-            </label>
+            {showLegacyToken ? (
+              <>
+                <label>
+                  Bot username
+                  <input value={store.settingsDraft.twitch.botUsername} onChange={(event) => store.updateDraft('twitch', { botUsername: event.target.value })} placeholder="requestbot" />
+                </label>
+                <label>
+                  OAuth token
+                  <input type="password" value={store.settingsDraft.twitch.oauthToken} onChange={(event) => store.updateDraft('twitch', { oauthToken: event.target.value })} placeholder="oauth:..." />
+                </label>
+              </>
+            ) : null}
             <label>
               Apple Music storefront
               <input value={store.settingsDraft.appleMusic.storefront} onChange={(event) => store.updateDraft('appleMusic', { storefront: event.target.value || 'us' })} placeholder="us" />
@@ -691,6 +790,12 @@ function App() {
               Auto-connect on launch
             </label>
           </div>
+          {state.auth.available && !signedIn ? (
+            <label className={styles.toggleLabel}>
+              <input type="checkbox" checked={legacyTokenOpen} onChange={(event) => setLegacyTokenOpen(event.target.checked)} />
+              Use a pasted token instead (advanced)
+            </label>
+          ) : null}
         </ModalShell>
       ) : null}
 

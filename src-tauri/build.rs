@@ -31,6 +31,10 @@ fn main() {
             "check_for_updates",
             "install_update",
             "open_overlay_preview",
+            "begin_twitch_sign_in",
+            "cancel_twitch_sign_in",
+            "open_twitch_sign_in_page",
+            "sign_out_twitch",
         ]),
     ))
     .expect("failed to run tauri-build");

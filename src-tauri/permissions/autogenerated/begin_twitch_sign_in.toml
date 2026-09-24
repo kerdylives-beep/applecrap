@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-begin-twitch-sign-in"
+description = "Enables the begin_twitch_sign_in command without any pre-configured scope."
+commands.allow = ["begin_twitch_sign_in"]
+
+[[permission]]
+identifier = "deny-begin-twitch-sign-in"
+description = "Denies the begin_twitch_sign_in command without any pre-configured scope."
+commands.deny = ["begin_twitch_sign_in"]

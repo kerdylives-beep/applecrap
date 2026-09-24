@@ -411,6 +411,95 @@ pub struct PersistedState {
     pub settings: AppSettings,
     pub queue: Vec<QueueItem>,
     pub logs: Vec<LogEntry>,
+    /// Signed-in Twitch accounts. Tokens are encrypted on disk and never
+    /// included in `AppState`, so they never reach the UI.
+    #[serde(default)]
+    pub auth: AuthState,
+}
+
+/// Which signed-in Twitch account something belongs to.
+#[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum AuthSlot {
+    /// The account that chats (often a dedicated bot account).
+    Bot,
+    /// The channel owner: needed for Channel Points.
+    Broadcaster,
+}
+
+impl AuthSlot {
+    pub fn label(self) -> &'static str {
+        match self {
+            AuthSlot::Bot => "bot",
+            AuthSlot::Broadcaster => "broadcaster",
+        }
+    }
+}
+
+/// A Twitch account signed in through the device-code flow.
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct TwitchAuth {
+    pub login: String,
+    pub user_id: String,
+    pub access_token: String,
+    pub refresh_token: String,
+    /// Unix seconds when the access token expires.
+    pub expires_at: i64,
+    pub scopes: Vec<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct AuthState {
+    pub bot: Option<TwitchAuth>,
+    pub broadcaster: Option<TwitchAuth>,
+}
+
+impl AuthState {
+    pub fn slot(&self, slot: AuthSlot) -> Option<&TwitchAuth> {
+        match slot {
+            AuthSlot::Bot => self.bot.as_ref(),
+            AuthSlot::Broadcaster => self.broadcaster.as_ref(),
+        }
+    }
+
+    pub fn slot_mut(&mut self, slot: AuthSlot) -> &mut Option<TwitchAuth> {
+        match slot {
+            AuthSlot::Bot => &mut self.bot,
+            AuthSlot::Broadcaster => &mut self.broadcaster,
+        }
+    }
+}
+
+/// What the UI is told about Twitch sign-in. Deliberately token-free.
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthSummary {
+    /// False when this build has no Twitch client ID, so sign-in can't run.
+    pub available: bool,
+    pub bot: Option<SignedInAccount>,
+    pub broadcaster: Option<SignedInAccount>,
+    pub pending: Option<PendingSignIn>,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SignedInAccount {
+    pub login: String,
+    /// Whether the token carries the Channel Points scopes.
+    pub can_manage_rewards: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingSignIn {
+    pub slot: AuthSlot,
+    pub user_code: String,
+    pub verification_uri: String,
+    /// Unix seconds when the code stops working.
+    pub expires_at: i64,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
@@ -427,6 +516,7 @@ pub struct AppState {
     pub storage: StorageInfo,
     pub stats: AppStats,
     pub update: Option<UpdateInfo>,
+    pub auth: AuthSummary,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

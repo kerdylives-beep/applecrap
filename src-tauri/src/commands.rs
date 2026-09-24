@@ -4,7 +4,10 @@ use tauri::State;
 
 use crate::{
     app::AppContext,
-    models::{ApproveRequestPayload, ManualRequestPayload, OpenTrackPayload, SaveSettingsPayload},
+    models::{
+        ApproveRequestPayload, AuthSlot, ManualRequestPayload, OpenTrackPayload,
+        SaveSettingsPayload,
+    },
 };
 
 #[tauri::command]
@@ -235,4 +238,40 @@ pub fn window_close(window: tauri::WebviewWindow) -> Result<(), String> {
 #[tauri::command]
 pub fn window_start_drag(window: tauri::WebviewWindow) -> Result<(), String> {
     window.start_dragging().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn begin_twitch_sign_in(
+    slot: AuthSlot,
+    context: State<'_, Arc<AppContext>>,
+) -> Result<crate::models::AppState, String> {
+    context
+        .begin_sign_in(slot)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn cancel_twitch_sign_in(
+    context: State<'_, Arc<AppContext>>,
+) -> Result<crate::models::AppState, String> {
+    Ok(context.cancel_sign_in().await)
+}
+
+#[tauri::command]
+pub async fn open_twitch_sign_in_page(
+    context: State<'_, Arc<AppContext>>,
+) -> Result<crate::models::CommandResult, String> {
+    Ok(context.open_sign_in_page().await)
+}
+
+#[tauri::command]
+pub async fn sign_out_twitch(
+    slot: AuthSlot,
+    context: State<'_, Arc<AppContext>>,
+) -> Result<crate::models::AppState, String> {
+    context
+        .sign_out(slot)
+        .await
+        .map_err(|error| error.to_string())
 }

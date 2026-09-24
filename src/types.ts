@@ -159,6 +159,28 @@ export type UpdateInfo = {
   assetUrl: string
 }
 
+export type AuthSlot = 'bot' | 'broadcaster'
+
+export type SignedInAccount = {
+  login: string
+  canManageRewards: boolean
+}
+
+export type PendingSignIn = {
+  slot: AuthSlot
+  userCode: string
+  verificationUri: string
+  expiresAt: number
+}
+
+export type AuthSummary = {
+  available: boolean
+  bot: SignedInAccount | null
+  broadcaster: SignedInAccount | null
+  pending: PendingSignIn | null
+  error: string | null
+}
+
 export type AppState = {
   settings: AppSettings
   queue: QueueItem[]
@@ -171,6 +193,7 @@ export type AppState = {
   storage: StorageInfo
   stats: AppStats
   update?: UpdateInfo | null
+  auth: AuthSummary
 }
 
 export type ManualRequestPayload = {

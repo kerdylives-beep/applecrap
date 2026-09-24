@@ -171,7 +171,11 @@ pub fn run() {
             player_hide,
             check_for_updates,
             install_update,
-            open_overlay_preview
+            open_overlay_preview,
+            begin_twitch_sign_in,
+            cancel_twitch_sign_in,
+            open_twitch_sign_in_page,
+            sign_out_twitch
         ])
         .run(tauri::generate_context!())
         .expect("error while running AppleCrap Alpha");

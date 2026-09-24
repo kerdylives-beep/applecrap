@@ -43,6 +43,21 @@ pub fn open_overlay_preview(port: u16) -> Result<()> {
         .map_err(|error| anyhow!("unable to open {target}: {error}"))
 }
 
+/// Opens Twitch's device activation page for sign-in. Validated here, next
+/// to the opener, so only a Twitch https page can ever be launched this way.
+pub fn open_twitch_activation(url: &str) -> Result<()> {
+    if !crate::services::twitch_auth::is_twitch_activation_url(url) {
+        anyhow::bail!("Only Twitch's own activation page can be opened for sign-in.");
+    }
+    let mut command = Command::new("rundll32.exe");
+    command.args(["url.dll,FileProtocolHandler", url]);
+    hide_command_window(&mut command);
+    command
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| anyhow!("unable to open {url}: {error}"))
+}
+
 pub fn reveal_directory(path: &Path) -> Result<()> {
     Command::new("explorer.exe")
         .arg(path)

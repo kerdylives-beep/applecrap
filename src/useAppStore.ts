@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   approveRequest,
+  beginTwitchSignIn,
   bindAppEvents,
   bootstrapApp,
+  cancelTwitchSignIn,
   clearQueue,
   connectBot,
   dispatchNextRequest,
@@ -12,13 +14,15 @@ import {
   importLegacyState,
   installUpdate as installUpdateCommand,
   openOverlayPreview as openOverlayPreviewCommand,
+  openTwitchSignInPage,
   removeRequest,
   revealDataFolder,
   saveSettings,
   searchAppleMusic,
   sendRequestToManualReview,
+  signOutTwitch,
 } from './tauri'
-import type { AppSettings, AppState, CommandResult, LogEntry, PanelKey, SearchResult, TrackMatch } from './types'
+import type { AppSettings, AppState, AuthSlot, CommandResult, LogEntry, PanelKey, SearchResult, TrackMatch } from './types'
 import { buildDebugSummary, buildFeedbackMailto } from './utils'
 
 const MAX_VISIBLE_LOGS = 80
@@ -90,6 +94,14 @@ export function useAppStore() {
     if (!hydratedDraft.current) {
       setSettingsDraft(nextState.settings)
       hydratedDraft.current = true
+    } else if (nextState.settings.twitch.channel) {
+      // Signing in as the broadcaster fills in an empty channel; carry that
+      // into the draft so the next save doesn't blank it again.
+      setSettingsDraft((current) =>
+        current.twitch.channel.trim()
+          ? current
+          : { ...current, twitch: { ...current.twitch, channel: nextState.settings.twitch.channel } },
+      )
     }
   }, [])
 
@@ -344,6 +356,42 @@ export function useAppStore() {
     }
   }
 
+  const startTwitchSignIn = async (slot: AuthSlot) => {
+    const nextState = await runAction('twitch-sign-in', () => beginTwitchSignIn(slot))
+    if (nextState) {
+      setState(nextState)
+      setNotice('Enter the code on Twitch to finish signing in.')
+      // Save a click: open the activation page straight away.
+      const opened = await openTwitchSignInPage().catch(() => null)
+      if (opened && !opened.ok) {
+        setNotice(opened.message)
+      }
+    }
+  }
+
+  const reopenTwitchSignInPage = async () => {
+    const result = await runAction('twitch-open-page', openTwitchSignInPage)
+    if (result) {
+      applyResultNotice(result)
+    }
+  }
+
+  const abortTwitchSignIn = async () => {
+    const nextState = await runAction('twitch-cancel-sign-in', cancelTwitchSignIn)
+    if (nextState) {
+      setState(nextState)
+      setNotice('Sign-in cancelled.')
+    }
+  }
+
+  const signOutOfTwitch = async (slot: AuthSlot) => {
+    const nextState = await runAction('twitch-sign-out', () => signOutTwitch(slot))
+    if (nextState) {
+      setState(nextState)
+      setNotice('Signed out of Twitch.')
+    }
+  }
+
   const submitManualRequest = async () => {
     const query = manualQuery.trim()
     if (!query) {
@@ -529,6 +577,10 @@ export function useAppStore() {
     openOverlayPreview,
     startBot,
     stopBot,
+    startTwitchSignIn,
+    reopenTwitchSignInPage,
+    abortTwitchSignIn,
+    signOutOfTwitch,
     submitManualRequest,
     removeQueueItem,
     removeQueueItemById,

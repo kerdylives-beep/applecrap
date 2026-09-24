@@ -183,10 +183,22 @@
           "markdownDescription": "Enables the approve_request command without any pre-configured scope."
         },
         {
+          "description": "Enables the begin_twitch_sign_in command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-begin-twitch-sign-in",
+          "markdownDescription": "Enables the begin_twitch_sign_in command without any pre-configured scope."
+        },
+        {
           "description": "Enables the bootstrap_app command without any pre-configured scope.",
           "type": "string",
           "const": "allow-bootstrap-app",
           "markdownDescription": "Enables the bootstrap_app command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the cancel_twitch_sign_in command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-cancel-twitch-sign-in",
+          "markdownDescription": "Enables the cancel_twitch_sign_in command without any pre-configured scope."
         },
         {
           "description": "Enables the check_for_updates command without any pre-configured scope.",
@@ -255,6 +267,12 @@
           "markdownDescription": "Enables the open_track command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_twitch_sign_in_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-twitch-sign-in-page",
+          "markdownDescription": "Enables the open_twitch_sign_in_page command without any pre-configured scope."
+        },
+        {
           "description": "Enables the player_bridge_report command without any pre-configured scope.",
           "type": "string",
           "const": "allow-player-bridge-report",
@@ -309,6 +327,12 @@
           "markdownDescription": "Enables the send_request_to_manual_review command without any pre-configured scope."
         },
         {
+          "description": "Enables the sign_out_twitch command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-sign-out-twitch",
+          "markdownDescription": "Enables the sign_out_twitch command without any pre-configured scope."
+        },
+        {
           "description": "Enables the window_close command without any pre-configured scope.",
           "type": "string",
           "const": "allow-window-close",
@@ -339,10 +363,22 @@
           "markdownDescription": "Denies the approve_request command without any pre-configured scope."
         },
         {
+          "description": "Denies the begin_twitch_sign_in command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-begin-twitch-sign-in",
+          "markdownDescription": "Denies the begin_twitch_sign_in command without any pre-configured scope."
+        },
+        {
           "description": "Denies the bootstrap_app command without any pre-configured scope.",
           "type": "string",
           "const": "deny-bootstrap-app",
           "markdownDescription": "Denies the bootstrap_app command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the cancel_twitch_sign_in command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-cancel-twitch-sign-in",
+          "markdownDescription": "Denies the cancel_twitch_sign_in command without any pre-configured scope."
         },
         {
           "description": "Denies the check_for_updates command without any pre-configured scope.",
@@ -411,6 +447,12 @@
           "markdownDescription": "Denies the open_track command without any pre-configured scope."
         },
         {
+          "description": "Denies the open_twitch_sign_in_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-twitch-sign-in-page",
+          "markdownDescription": "Denies the open_twitch_sign_in_page command without any pre-configured scope."
+        },
+        {
           "description": "Denies the player_bridge_report command without any pre-configured scope.",
           "type": "string",
           "const": "deny-player-bridge-report",
@@ -463,6 +505,12 @@
           "type": "string",
           "const": "deny-send-request-to-manual-review",
           "markdownDescription": "Denies the send_request_to_manual_review command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the sign_out_twitch command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-sign-out-twitch",
+          "markdownDescription": "Denies the sign_out_twitch command without any pre-configured scope."
         },
         {
           "description": "Denies the window_close command without any pre-configured scope.",

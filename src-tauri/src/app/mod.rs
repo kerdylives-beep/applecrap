@@ -24,7 +24,7 @@ use tokio::sync::{mpsc, Mutex, RwLock};
 
 use crate::{
     models::{
-        compact_log_message, AppState, AppStats, ApproveRequestPayload, BotConnectionState,
+        compact_log_message, AppState, AppStats, ApproveRequestPayload, AuthSlot, BotConnectionState,
         BotStatus, CommandResult, DiagnosticsSnapshot, LegacyImportStatus, LogEntry, LogLevel,
         OpenTrackPayload, OverlayQueueItem, OverlayState, PersistedState, ProbeResult,
         ProbeSnapshot, QueueHandoffState, QueueItem, ResolutionStatus, SaveSettingsPayload,
@@ -36,6 +36,7 @@ use crate::{
     },
 };
 
+mod auth;
 mod maintenance;
 mod overlay;
 mod playback;
@@ -64,6 +65,10 @@ pub struct AppContext {
     /// Running overlay server, with the port it was bound to so a settings
     /// change can tell whether it needs restarting.
     overlay_task: Mutex<Option<(u16, JoinHandle<()>)>>,
+    /// Serializes Twitch token refreshes (refresh tokens are one-time use).
+    auth_refresh_lock: Mutex<()>,
+    /// The background poll for an in-progress device-code sign-in.
+    sign_in_task: Mutex<Option<JoinHandle<()>>>,
 }
 
 struct TwitchConnection {
@@ -88,6 +93,8 @@ struct RuntimeState {
     /// playback removes the item from the queue, and the overlay still wants
     /// to credit whoever asked for it.
     now_playing_request: Option<QueueItem>,
+    pending_sign_in: Option<crate::models::PendingSignIn>,
+    auth_error: Option<String>,
 }
 
 impl AppContext {
@@ -141,9 +148,13 @@ impl AppContext {
                 update: None,
                 media_keys_claimed: false,
                 now_playing_request: None,
+                pending_sign_in: None,
+                auth_error: None,
             }),
             twitch_connection: Mutex::new(None),
             overlay_task: Mutex::new(None),
+            auth_refresh_lock: Mutex::new(()),
+            sign_in_task: Mutex::new(None),
         })
     }
 
@@ -181,6 +192,16 @@ impl AppContext {
         let overlay_context = Arc::clone(self);
         tauri::async_runtime::spawn(async move {
             overlay_context.sync_overlay_server().await;
+        });
+
+        // Twitch requires validating signed-in tokens at startup and hourly.
+        let validation_context = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(15)).await;
+            loop {
+                validation_context.validate_signed_in_accounts().await;
+                tokio::time::sleep(Duration::from_secs(60 * 60)).await;
+            }
         });
 
         // Debounced writer for low-stakes state changes (log lines). Queue and
@@ -236,6 +257,7 @@ impl AppContext {
             legacy_import: runtime.legacy_import.clone(),
             storage: self.storage.storage.clone(),
             update: runtime.update.clone(),
+            auth: self.auth_summary(&persisted, &runtime),
             stats: AppStats {
                 total_requests: persisted.queue.len(),
                 unresolved_requests: persisted

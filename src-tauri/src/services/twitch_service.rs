@@ -31,7 +31,7 @@ use tokio_native_tls::{native_tls, TlsConnector};
 
 use crate::{
     app::AppContext,
-    models::{BotConnectionState, LogLevel, ProbeSnapshot},
+    models::{AuthSlot, BotConnectionState, LogLevel, ProbeSnapshot},
     services::{irc, queue_engine},
 };
 
@@ -73,12 +73,13 @@ pub struct ChatIdentity {
     pub login: String,
     /// IRC `PASS` value, including the `oauth:` prefix.
     pub password: String,
-    /// Whether a failed login can be recovered by refreshing the token.
-    pub refreshable: bool,
+    /// The signed-in account this token belongs to. `None` for a pasted
+    /// token, which can't be refreshed automatically.
+    pub slot: Option<AuthSlot>,
 }
 
 pub async fn connect(context: Arc<AppContext>) -> Result<()> {
-    let identity = context.chat_identity().await?;
+    let login = context.chat_login().await?;
     let settings = context.current_settings().await;
     let channel = settings
         .twitch
@@ -103,8 +104,7 @@ pub async fn connect(context: Arc<AppContext>) -> Result<()> {
         .add_log(
             LogLevel::Info,
             format!(
-                "Connecting Twitch bot as @{} to #{channel} (listening for {}, !remove, !song, !queue, and !skip).",
-                identity.login,
+                "Connecting Twitch bot as @{login} to #{channel} (listening for {}, !remove, !song, !queue, and !skip).",
                 settings.twitch.request_command.trim()
             ),
         )
@@ -165,6 +165,19 @@ async fn supervise(
     loop {
         let identity = match context.chat_identity().await {
             Ok(identity) => identity,
+            // Refreshing a signed-in token needs the network, which may not
+            // be up yet (e.g. auto-connect right after boot): keep retrying.
+            Err(error) if error.downcast_ref::<reqwest::Error>().is_some() => {
+                attempt = attempt.saturating_add(1);
+                wait_before_retry(
+                    &context,
+                    &channel,
+                    attempt,
+                    &format!("Couldn't reach Twitch to refresh the sign-in ({error})"),
+                )
+                .await;
+                continue;
+            }
             Err(error) => {
                 stop_with_error(&context, connection_id, &channel, error.to_string()).await;
                 return;
@@ -198,9 +211,9 @@ async fn supervise(
             SessionEnd::AuthFailed(message) => {
                 // A signed-in token may just have expired: refresh once and
                 // retry. A second failure (or a pasted token) needs the user.
-                if identity.refreshable && !refreshed_after_auth_failure {
+                if identity.slot.is_some() && !refreshed_after_auth_failure {
                     refreshed_after_auth_failure = true;
-                    if context.force_refresh_chat_token().await.is_ok() {
+                    if context.force_refresh_chat_token(&identity).await.is_ok() {
                         context
                             .add_log(LogLevel::Info, "Twitch token refreshed; reconnecting.")
                             .await;
@@ -226,23 +239,27 @@ async fn supervise(
         };
 
         attempt = attempt.saturating_add(1);
-        let delay = backoff_delay(attempt);
-        context
-            .update_bot_status(
-                BotConnectionState::Connecting,
-                "Reconnecting",
-                format!("{reason}. Retrying in {}s.", delay.as_secs()),
-                Some(channel.clone()),
-            )
-            .await;
-        context
-            .add_log(
-                LogLevel::Warn,
-                format!("{reason}; reconnecting in {}s.", delay.as_secs()),
-            )
-            .await;
-        tokio::time::sleep(delay).await;
+        wait_before_retry(&context, &channel, attempt, &reason).await;
     }
+}
+
+async fn wait_before_retry(context: &Arc<AppContext>, channel: &str, attempt: u32, reason: &str) {
+    let delay = backoff_delay(attempt);
+    context
+        .update_bot_status(
+            BotConnectionState::Connecting,
+            "Reconnecting",
+            format!("{reason}. Retrying in {}s.", delay.as_secs()),
+            Some(channel.to_string()),
+        )
+        .await;
+    context
+        .add_log(
+            LogLevel::Warn,
+            format!("{reason}; reconnecting in {}s.", delay.as_secs()),
+        )
+        .await;
+    tokio::time::sleep(delay).await;
 }
 
 async fn stop_with_error(
@@ -758,7 +775,7 @@ mod tests {
         ChatIdentity {
             login: "bot".to_string(),
             password: "oauth:secret".to_string(),
-            refreshable: false,
+            slot: None,
         }
     }
 
