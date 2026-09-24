@@ -225,6 +225,12 @@
           "markdownDescription": "Enables the disconnect_bot command without any pre-configured scope."
         },
         {
+          "description": "Enables the dismiss_alert command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-dismiss-alert",
+          "markdownDescription": "Enables the dismiss_alert command without any pre-configured scope."
+        },
+        {
           "description": "Enables the dispatch_next_request command without any pre-configured scope.",
           "type": "string",
           "const": "allow-dispatch-next-request",
@@ -403,6 +409,12 @@
           "type": "string",
           "const": "deny-disconnect-bot",
           "markdownDescription": "Denies the disconnect_bot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the dismiss_alert command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-dismiss-alert",
+          "markdownDescription": "Denies the dismiss_alert command without any pre-configured scope."
         },
         {
           "description": "Denies the dispatch_next_request command without any pre-configured scope.",

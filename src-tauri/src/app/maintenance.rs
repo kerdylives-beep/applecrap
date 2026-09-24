@@ -1,5 +1,10 @@
 //! Updates, diagnostics, and legacy data import.
 
+use crate::{
+    models::{Alert, AlertAction, AlertTone},
+    services::update_guard,
+};
+
 use super::*;
 
 impl AppContext {
@@ -8,7 +13,9 @@ impl AppContext {
         let client = self.http.clone();
 
         match updater::check_latest(&client, &current_version).await {
-            Ok(Some(update)) => {
+            Ok(Some(mut update)) => {
+                update.rolled_back = self.rolled_back_version().as_deref()
+                    == Some(update.version.trim_start_matches('v'));
                 self.add_log(
                     LogLevel::Info,
                     format!(
@@ -38,6 +45,12 @@ impl AppContext {
         let Some(update) = self.runtime.read().await.update.clone() else {
             return CommandResult::error("No update is available to install.");
         };
+        if update.rolled_back {
+            return CommandResult::error(format!(
+                "Version {} didn't start on this PC last time, so it won't install automatically. You can download it from {}.",
+                update.version, update.release_url
+            ));
+        }
 
         self.add_log(
             LogLevel::Info,
@@ -46,7 +59,7 @@ impl AppContext {
         .await;
 
         let client = self.http.clone();
-        let staged = match updater::download_and_stage(&client, &update).await
+        let _staged = match updater::download_and_stage(&client, &update).await
         {
             Ok(staged) => staged,
             Err(error) => {
@@ -68,7 +81,14 @@ impl AppContext {
         )
         .await;
 
-        if let Err(error) = updater::swap_and_launch(&staged) {
+        let installed = update_guard::Layout::current().and_then(|layout| {
+            update_guard::install(
+                &layout,
+                &self.handle.package_info().version.to_string(),
+                update.version.trim_start_matches('v'),
+            )
+        });
+        if let Err(error) = installed {
             self.add_log(LogLevel::Error, format!("Update install failed: {error}"))
                 .await;
             return CommandResult::error(format!(
@@ -84,6 +104,71 @@ impl AppContext {
         });
 
         CommandResult::ok("Update installed. Restarting...")
+    }
+
+    /// The UI loaded: if this run is a fresh update on probation, it passed.
+    pub fn note_ui_loaded(&self) {
+        if let Ok(layout) = update_guard::Layout::current() {
+            update_guard::mark_healthy(&layout, &self.handle.package_info().version.to_string());
+        }
+    }
+
+    fn rolled_back_version(&self) -> Option<String> {
+        update_guard::Layout::current()
+            .ok()
+            .and_then(|layout| update_guard::rolled_back_version(&layout))
+    }
+
+    /// Tells the user an update was undone. Runs during setup, before any
+    /// UI exists, so it only records the alert.
+    pub fn report_update_notice(self: &Arc<Self>, notice: update_guard::StartupNotice) {
+        let update_guard::StartupNotice::RolledBack { failed } = notice;
+        let current = self.handle.package_info().version.to_string();
+        if let Ok(mut runtime) = self.runtime.try_write() {
+            runtime.alerts.push(Alert {
+                id: "update-rolled-back".to_string(),
+                tone: AlertTone::Warn,
+                title: format!("Update {failed} didn't start, so AppleCrap went back to {current}"),
+                detail: "Nothing was lost. It won't try that version again; the next update installs as usual.".to_string(),
+                action: Some(AlertAction::ReportProblem),
+            });
+        }
+        let context = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            context
+                .add_log(LogLevel::Warn, format!("Update {failed} didn't start; rolled back to {current}."))
+                .await;
+        });
+    }
+
+    /// Shows a banner, replacing any earlier one with the same id.
+    pub async fn raise_alert(&self, alert: Alert) {
+        {
+            let mut runtime = self.runtime.write().await;
+            if runtime.alerts.iter().any(|existing| *existing == alert) {
+                return;
+            }
+            runtime.alerts.retain(|existing| existing.id != alert.id);
+            runtime.alerts.push(alert);
+        }
+        self.emit_state().await;
+    }
+
+    pub async fn clear_alert(&self, id: &str) {
+        let removed = {
+            let mut runtime = self.runtime.write().await;
+            let before = runtime.alerts.len();
+            runtime.alerts.retain(|alert| alert.id != id);
+            before != runtime.alerts.len()
+        };
+        if removed {
+            self.emit_state().await;
+        }
+    }
+
+    pub async fn dismiss_alert(&self, id: &str) -> AppState {
+        self.clear_alert(id).await;
+        self.snapshot().await
     }
 
     pub async fn export_diagnostics(&self) -> CommandResult {

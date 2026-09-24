@@ -9,11 +9,17 @@ use app::AppContext;
 use commands::*;
 use tauri::Manager;
 
+pub fn run_update_watchdog_if_requested() -> Option<i32> {
+    services::update_guard::run_watchdog_if_requested()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            services::updater::clean_stale_artifacts();
+            let update_notice = services::update_guard::Layout::current().ok().and_then(|layout| {
+                services::update_guard::on_startup(&layout, &app.package_info().version.to_string())
+            });
 
             // Media keys are claimed dynamically (see
             // AppContext::sync_media_key_claim); this only installs the
@@ -40,6 +46,9 @@ pub fn run() {
             #[cfg(windows)]
             services::audio_session::spawn_session_labeler();
             let context = Arc::new(AppContext::initialize(app.handle().clone())?);
+            if let Some(notice) = update_notice {
+                context.report_update_notice(notice);
+            }
             context.start_background_services();
             app.manage(context);
 
@@ -175,7 +184,8 @@ pub fn run() {
             begin_twitch_sign_in,
             cancel_twitch_sign_in,
             open_twitch_sign_in_page,
-            sign_out_twitch
+            sign_out_twitch,
+            dismiss_alert
         ])
         .run(tauri::generate_context!())
         .expect("error while running AppleCrap Alpha");

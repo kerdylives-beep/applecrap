@@ -14,6 +14,9 @@ use crate::{
 pub async fn bootstrap_app(
     context: State<'_, Arc<AppContext>>,
 ) -> Result<crate::models::AppState, String> {
+    // The UI asking for state means it loaded: a fresh update has proven
+    // itself.
+    context.note_ui_loaded();
     Ok(context.snapshot().await)
 }
 
@@ -274,4 +277,12 @@ pub async fn sign_out_twitch(
         .sign_out(slot)
         .await
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn dismiss_alert(
+    id: String,
+    context: State<'_, Arc<AppContext>>,
+) -> Result<crate::models::AppState, String> {
+    Ok(context.dismiss_alert(&id).await)
 }

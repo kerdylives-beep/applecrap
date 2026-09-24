@@ -105,6 +105,7 @@ struct RuntimeState {
     pending_sign_in: Option<crate::models::PendingSignIn>,
     auth_error: Option<String>,
     channel_points_status: crate::models::ChannelPointsStatus,
+    alerts: Vec<crate::models::Alert>,
 }
 
 impl AppContext {
@@ -161,6 +162,7 @@ impl AppContext {
                 pending_sign_in: None,
                 auth_error: None,
                 channel_points_status: Default::default(),
+                alerts: Vec::new(),
             }),
             twitch_connection: Mutex::new(None),
             overlay_task: Mutex::new(None),
@@ -279,6 +281,7 @@ impl AppContext {
             update: runtime.update.clone(),
             auth: self.auth_summary(&persisted, &runtime),
             channel_points: runtime.channel_points_status.clone(),
+            alerts: runtime.alerts.clone(),
             stats: AppStats {
                 total_requests: persisted.queue.len(),
                 unresolved_requests: persisted

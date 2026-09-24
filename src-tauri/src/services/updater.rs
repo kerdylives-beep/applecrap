@@ -1,4 +1,4 @@
-use std::{env, fs, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use base64::Engine;
@@ -81,6 +81,7 @@ pub async fn check_latest(client: &reqwest::Client, current: &str) -> Result<Opt
         release_url: payload.html_url,
         asset_url: asset.browser_download_url.clone(),
         signature_url: signature.map(|sig| sig.browser_download_url.clone()),
+        rolled_back: false,
     }))
 }
 
@@ -132,8 +133,7 @@ pub async fn download_and_stage(client: &reqwest::Client, update: &UpdateInfo) -
             .ok_or_else(|| anyhow!("The update zip does not contain an executable."))?;
 
         let mut entry = archive.by_index(exe_index)?;
-        let current_exe = env::current_exe()?;
-        let staged = current_exe.with_extension("new");
+        let staged = crate::services::update_guard::Layout::current()?.staged();
         let mut output = fs::File::create(&staged)
             .with_context(|| format!("Cannot write next to the app at {}", staged.display()))?;
         std::io::copy(&mut entry, &mut output)?;
@@ -142,39 +142,6 @@ pub async fn download_and_stage(client: &reqwest::Client, update: &UpdateInfo) -
     .await??;
 
     Ok(staged)
-}
-
-/// Swap the staged executable into place and launch it. The running image is
-/// renamed aside (allowed on Windows), the new exe takes its path, and the
-/// stale ".old" is cleaned up on the next start.
-pub fn swap_and_launch(staged: &PathBuf) -> Result<()> {
-    let current_exe = env::current_exe()?;
-    let old = current_exe.with_extension("old");
-
-    let _ = fs::remove_file(&old);
-    fs::rename(&current_exe, &old)
-        .context("Could not move the running executable aside. Is the app folder writable?")?;
-
-    if let Err(error) = fs::rename(staged, &current_exe) {
-        // Roll back so the app still launches from its original path.
-        let _ = fs::rename(&old, &current_exe);
-        return Err(anyhow::Error::new(error).context("Could not move the new executable into place"));
-    }
-
-    std::process::Command::new(&current_exe)
-        .spawn()
-        .context("The update installed but the new version failed to launch. Start it manually.")?;
-    Ok(())
-}
-
-/// Remove leftovers from a previous update. Deleting the ".old" image fails
-/// while the old process is still exiting; that is fine — it succeeds on a
-/// later start.
-pub fn clean_stale_artifacts() {
-    if let Ok(current_exe) = env::current_exe() {
-        let _ = fs::remove_file(current_exe.with_extension("old"));
-        let _ = fs::remove_file(current_exe.with_extension("new"));
-    }
 }
 
 /// Checks a release zip against its detached, base64-encoded ed25519

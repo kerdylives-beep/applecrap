@@ -33,6 +33,7 @@
     "allow-begin-twitch-sign-in",
     "allow-cancel-twitch-sign-in",
     "allow-open-twitch-sign-in-page",
-    "allow-sign-out-twitch"
+    "allow-sign-out-twitch",
+    "allow-dismiss-alert"
   ]
 }

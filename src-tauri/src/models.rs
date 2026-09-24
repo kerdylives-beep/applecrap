@@ -577,6 +577,7 @@ pub struct AppState {
     pub update: Option<UpdateInfo>,
     pub auth: AuthSummary,
     pub channel_points: ChannelPointsStatus,
+    pub alerts: Vec<Alert>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -589,6 +590,38 @@ pub struct UpdateInfo {
     /// manual download only.
     #[serde(default)]
     pub signature_url: Option<String>,
+    /// This version was installed here before and didn't start, so it was
+    /// rolled back. Offered as a manual download only.
+    #[serde(default)]
+    pub rolled_back: bool,
+}
+
+/// A banner for something the user should know about (a rolled-back
+/// update, a crash last session, Apple Music search trouble).
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Alert {
+    /// Stable per kind of problem, so raising it again replaces it.
+    pub id: String,
+    pub tone: AlertTone,
+    pub title: String,
+    pub detail: String,
+    pub action: Option<AlertAction>,
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AlertTone {
+    Info,
+    Warn,
+    Error,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AlertAction {
+    ReportProblem,
+    OpenUrl { label: String, url: String },
 }
 
 #[derive(Clone, Deserialize, Debug, Default)]
