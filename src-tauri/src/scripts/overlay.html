@@ -4,34 +4,69 @@
 <meta charset="utf-8" />
 <title>AppleCrap Now Playing</title>
 <style>
-  /* Transparent by default: OBS composites this over the scene. */
+  @font-face { font-family: 'Saira Semi Condensed'; font-weight: 600; src: url('/fonts/display-600.woff2') format('woff2'); }
+  @font-face { font-family: 'Saira Semi Condensed'; font-weight: 700; src: url('/fonts/display-700.woff2') format('woff2'); }
+  @font-face { font-family: 'IBM Plex Sans'; font-weight: 400; src: url('/fonts/text-400.woff2') format('woff2'); }
+  @font-face { font-family: 'IBM Plex Sans'; font-weight: 500; src: url('/fonts/text-500.woff2') format('woff2'); }
+
+  /* Same palette as the app: warm near-black, amber for music, violet for
+     Twitch. The page itself is transparent; OBS lays it over the scene. */
   :root {
-    --accent: #ffb74d;
-    --card: rgba(12, 16, 24, 0.82);
-    --text: #f2f6fb;
-    --muted: rgba(216, 228, 242, 0.72);
-    --dim: rgba(186, 202, 219, 0.55);
-    --radius: 16px;
+    --card: rgba(18, 17, 20, 0.9);
+    --chip: rgba(18, 17, 20, 0.84);
+    --line: rgba(255, 255, 255, 0.07);
+    --text: #f2efea;
+    --muted: #c8c3cc;
+    --dim: #8a8591;
+    --accent: #f2a93b;
+    --accent-soft: #2b2119;
+    --twitch: #c9beff;
+    --twitch-soft: #2a2440;
+    /* Fixed, so a long title never resizes the source in OBS. */
+    --width: 520px;
   }
 
   * { box-sizing: border-box; }
+
+  /* `hidden` must win over the display rules below. */
+  [hidden] { display: none !important; }
 
   html, body {
     margin: 0;
     padding: 0;
     background: transparent;
     overflow: hidden;
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
     color: var(--text);
+    -webkit-font-smoothing: antialiased;
   }
 
+  /* Preview only (opened from the app): a stand-in for the stream. */
+  body.preview {
+    min-height: 100vh;
+    background:
+      linear-gradient(135deg, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.55)),
+      repeating-conic-gradient(#3a4452 0% 25%, #333c48 0% 50%) 0 0 / 32px 32px;
+  }
+
+  .preview-note {
+    display: none;
+    position: fixed;
+    right: 16px;
+    bottom: 12px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  body.preview .preview-note { display: block; }
+
   #root {
-    padding: 16px;
+    width: calc(var(--width) + 40px);
+    padding: 20px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    align-items: flex-start;
-    /* Hidden until there is something to show, so an idle scene stays clean. */
+    gap: 8px;
+    /* Hidden until something plays, so an idle scene stays clean. */
     opacity: 0;
     transform: translateY(10px);
     transition: opacity 420ms ease, transform 420ms ease;
@@ -43,169 +78,258 @@
   }
 
   .card {
-    display: flex;
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
     align-items: center;
     gap: 14px;
-    max-width: 520px;
-    padding: 14px;
-    border-radius: var(--radius);
+    width: var(--width);
+    padding: 12px;
+    border-radius: 14px;
     background: var(--card);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(14px);
+    border: 1px solid var(--line);
   }
 
   .art {
-    width: 84px;
-    height: 84px;
-    flex: 0 0 auto;
+    width: 76px;
+    height: 76px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.06);
     object-fit: cover;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    background: var(--accent-soft);
   }
 
-  .art[hidden] { display: none; }
+  .art-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font: 700 26px 'Saira Semi Condensed', sans-serif;
+    color: var(--accent);
+  }
 
   .meta {
-    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
+    min-width: 0;
   }
 
-  .eyebrow {
+  .label {
     display: flex;
     align-items: center;
     gap: 7px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
+    font: 600 10px 'Saira Semi Condensed', sans-serif;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--accent);
   }
 
   .pulse {
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: var(--accent);
     animation: pulse 2s ease-in-out infinite;
   }
 
+  .paused .pulse { animation: none; opacity: 0.5; }
+
   @keyframes pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.45; transform: scale(0.8); }
+    50% { opacity: 0.4; transform: scale(0.8); }
   }
 
   .title {
-    font-size: 21px;
-    font-weight: 650;
-    line-height: 1.2;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 400px;
+    font: 700 23px/1.15 'Saira Semi Condensed', sans-serif;
   }
 
-  .artist {
-    font-size: 15px;
+  .sub {
+    font-size: 13px;
     color: var(--muted);
-    white-space: nowrap;
+  }
+
+  .sub .who { color: var(--twitch); }
+  .sub .sep { color: var(--dim); }
+
+  .points {
+    margin-left: 4px;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: var(--twitch-soft);
+    color: var(--twitch);
+    font-size: 11px;
+  }
+
+  /* Text wider than the card drifts to its end and back instead of being
+     cut off or stretching the overlay. */
+  .marquee {
     overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 400px;
+    white-space: nowrap;
   }
 
-  .requester {
-    margin-top: 3px;
-    font-size: 12.5px;
-    color: var(--dim);
+  .marquee > span {
+    display: inline-block;
   }
 
-  .requester b {
-    color: var(--accent);
-    font-weight: 600;
+  /* Fade the edge the text runs off, not the start of the words. */
+  .marquee.scrolling {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
   }
 
-  .requester[hidden] { display: none; }
+  .marquee.scrolling > span {
+    animation: drift var(--duration, 10s) ease-in-out infinite alternate;
+  }
+
+  @keyframes drift {
+    0%, 18% { transform: translateX(0); }
+    82%, 100% { transform: translateX(var(--shift, 0)); }
+  }
+
+  .progress {
+    height: 3px;
+    margin-top: 7px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+  }
+
+
+  .progress-fill {
+    height: 100%;
+    width: 0;
+    border-radius: 2px;
+    background: var(--accent);
+    transition: width 1s linear;
+  }
 
   .next {
-    max-width: 520px;
-    padding: 10px 14px;
+    width: var(--width);
+    padding: 8px 12px 9px;
     border-radius: 12px;
-    background: rgba(12, 16, 24, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(10px);
+    background: var(--chip);
+    border: 1px solid var(--line);
   }
 
-  .next[hidden] { display: none; }
 
   .next-label {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
+    font: 600 10px 'Saira Semi Condensed', sans-serif;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--dim);
-    margin-bottom: 5px;
+    margin-bottom: 3px;
   }
 
   .next-item {
+    display: flex;
+    gap: 8px;
     font-size: 13px;
-    color: var(--muted);
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .next-num {
+    width: 12px;
+    flex: 0 0 auto;
+    color: var(--dim);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .next-song {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .next-song span { color: var(--muted); }
+
+  .next-who {
+    flex: 0 0 auto;
+    max-width: 36%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--twitch);
+    font-size: 12px;
+  }
+
+  .hint {
+    align-self: flex-start;
+    max-width: var(--width);
+    padding: 4px 11px;
+    border-radius: 999px;
+    background: var(--chip);
+    border: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--twitch);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.5;
   }
 
-  .next-item span { color: var(--dim); }
-
-  /* Re-trigger on track change so a new song visibly lands. */
+  /* A new song slides in. */
   .bump { animation: bump 520ms ease; }
 
   @keyframes bump {
     0% { opacity: 0; transform: translateX(-14px); }
     100% { opacity: 1; transform: translateX(0); }
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    .marquee.scrolling > span, .pulse, .bump { animation: none; }
+  }
 </style>
 </head>
 <body>
   <div id="root">
     <div class="card" id="card">
+      <div class="art art-fallback" id="art-fallback"></div>
       <img class="art" id="art" alt="" hidden />
       <div class="meta">
-        <div class="eyebrow"><span class="pulse"></span><span>Now Playing</span></div>
-        <div class="title" id="title"></div>
-        <div class="artist" id="artist"></div>
-        <div class="requester" id="requester" hidden></div>
+        <div class="label" id="label"><span class="pulse"></span><span id="label-text">Now playing</span></div>
+        <div class="marquee title" id="title"><span></span></div>
+        <div class="marquee sub" id="sub"><span></span></div>
+        <div class="progress" id="progress" hidden><div class="progress-fill" id="progress-fill"></div></div>
       </div>
     </div>
     <div class="next" id="next" hidden>
       <div class="next-label">Next up</div>
       <div id="next-items"></div>
     </div>
+    <div class="hint" id="hint" hidden></div>
   </div>
+  <div class="preview-note">Preview — in OBS this sits on top of your scene.</div>
 
 <script>
 (function () {
   'use strict'
 
-  const root = document.getElementById('root')
-  const card = document.getElementById('card')
-  const art = document.getElementById('art')
-  const titleEl = document.getElementById('title')
-  const artistEl = document.getElementById('artist')
-  const requesterEl = document.getElementById('requester')
-  const nextEl = document.getElementById('next')
-  const nextItems = document.getElementById('next-items')
+  const $ = (id) => document.getElementById(id)
+  const root = $('root')
+  const card = $('card')
+  const art = $('art')
+  const artFallback = $('art-fallback')
+  const label = $('label')
+  const labelText = $('label-text')
+  const titleEl = $('title')
+  const subEl = $('sub')
+  const progress = $('progress')
+  const progressFill = $('progress-fill')
+  const nextEl = $('next')
+  const nextItems = $('next-items')
+  const hintEl = $('hint')
+
+  if (new URLSearchParams(location.search).has('preview')) {
+    document.body.classList.add('preview')
+  }
 
   let lastTrackKey = ''
   let lastPayload = ''
   let hideTimer = null
 
-  // Fading out the instant a state blip arrives would flicker the overlay on
-  // stream, so hiding waits a beat while showing stays immediate.
+  // Fading out the instant a state blip arrives would flicker on stream, so
+  // hiding waits a beat while showing is immediate.
   function setVisible(visible) {
     if (visible) {
       if (hideTimer !== null) {
@@ -231,6 +355,31 @@
       .replace(/"/g, '&quot;')
   }
 
+  function initials(text) {
+    const words = String(text || '').replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean)
+    return (words.slice(0, 2).map((word) => word[0]).join('') || '♪').toUpperCase()
+  }
+
+  // Starts the drift only when the text is wider than its box, at a speed
+  // that suits how far it has to travel.
+  function fit(el) {
+    const inner = el.firstElementChild
+    el.classList.remove('scrolling')
+    const overflow = inner.scrollWidth - el.clientWidth
+    if (overflow > 1) {
+      el.style.setProperty('--shift', -(overflow + 20) + 'px')
+      el.style.setProperty('--duration', Math.max(8, (overflow + 20) / 22) + 's')
+      el.classList.add('scrolling')
+    }
+  }
+
+  function setMarquee(el, html) {
+    const inner = el.firstElementChild
+    if (inner.innerHTML === html) return
+    inner.innerHTML = html
+    fit(el)
+  }
+
   function render(state) {
     const playing = !!state.playing && !!state.title
     setVisible(playing)
@@ -240,46 +389,75 @@
     }
 
     const trackKey = state.title + '|' + state.artist
-    if (trackKey !== lastTrackKey) {
+    const newTrack = trackKey !== lastTrackKey
+    if (newTrack) {
       lastTrackKey = trackKey
       card.classList.remove('bump')
-      // Force reflow so the animation restarts on every track change.
       void card.offsetWidth
       card.classList.add('bump')
     }
 
-    titleEl.textContent = state.title || ''
-    artistEl.textContent = state.artist || ''
+    label.classList.toggle('paused', !!state.paused)
+    labelText.textContent = state.paused ? 'Paused' : 'Now playing'
+
+    setMarquee(titleEl, escapeHtml(state.title))
+    let sub = escapeHtml(state.artist)
+    if (state.requestedBy) {
+      sub +=
+        ' <span class="sep">·</span> requested by <span class="who">@' + escapeHtml(state.requestedBy) + '</span>' +
+        (state.requestedWithPoints ? '<span class="points">points</span>' : '')
+    }
+    setMarquee(subEl, sub)
 
     if (state.artworkUrl) {
-      if (art.getAttribute('src') !== state.artworkUrl) {
-        art.setAttribute('src', state.artworkUrl)
-      }
+      if (art.getAttribute('src') !== state.artworkUrl) art.setAttribute('src', state.artworkUrl)
       art.hidden = false
+      artFallback.hidden = true
     } else {
       art.hidden = true
       art.removeAttribute('src')
+      artFallback.hidden = false
+      artFallback.textContent = initials(state.title)
     }
 
-    if (state.requestedBy) {
-      requesterEl.innerHTML = 'requested by <b>' + escapeHtml(state.requestedBy) + '</b>'
-      requesterEl.hidden = false
+    if (state.durationMs && state.positionMs != null) {
+      progress.hidden = false
+      const percent = Math.min(100, (state.positionMs / state.durationMs) * 100)
+      if (newTrack) {
+        // Jump to the new track's position instead of sliding back.
+        progressFill.style.transition = 'none'
+        progressFill.style.width = percent + '%'
+        void progressFill.offsetWidth
+        progressFill.style.transition = ''
+      } else {
+        progressFill.style.width = percent + '%'
+      }
     } else {
-      requesterEl.hidden = true
+      progress.hidden = true
     }
 
     const queue = Array.isArray(state.queue) ? state.queue : []
     if (state.showQueue && queue.length > 0) {
       nextItems.innerHTML = queue
-        .map(function (item) {
-          const who = item.requestedBy ? ' <span>· ' + escapeHtml(item.requestedBy) + '</span>' : ''
+        .map(function (item, index) {
           const artist = item.artist ? ' <span>— ' + escapeHtml(item.artist) + '</span>' : ''
-          return '<div class="next-item">' + escapeHtml(item.title) + artist + who + '</div>'
+          const who = item.requestedBy ? '<span class="next-who">@' + escapeHtml(item.requestedBy) + '</span>' : ''
+          return (
+            '<div class="next-item"><span class="next-num">' + (index + 1) + '</span>' +
+            '<span class="next-song">' + escapeHtml(item.title) + artist + '</span>' + who + '</div>'
+          )
         })
         .join('')
       nextEl.hidden = false
     } else {
       nextEl.hidden = true
+    }
+
+    if (state.hint) {
+      hintEl.textContent = state.hint
+      hintEl.hidden = false
+    } else {
+      hintEl.hidden = true
     }
   }
 
@@ -295,6 +473,14 @@
     } catch (_) {
       // App closed or restarting: keep the last frame and retry.
     }
+  }
+
+  // Text widths change once the fonts arrive.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () {
+      fit(titleEl)
+      fit(subEl)
+    })
   }
 
   poll()

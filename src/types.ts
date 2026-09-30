@@ -68,6 +68,7 @@ export type AppSettings = {
     port: number
     showQueue: boolean
     queueCount: number
+    showHint: boolean
   }
   channelPoints: {
     enabled: boolean

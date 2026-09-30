@@ -46,7 +46,8 @@ impl AppContext {
                 .iter()
                 .any(|state| probe.status.eq_ignore_ascii_case(state));
 
-        let requested_by = current_request(&runtime).map(|request| request.requested_by);
+        let request = current_request(&runtime);
+        let paused = playing && !probe.status.eq_ignore_ascii_case("playing");
 
         let queue = persisted
             .queue
@@ -67,15 +68,29 @@ impl AppContext {
             })
             .collect();
 
+        let hint = settings.show_hint.then(|| {
+            request_hint(
+                &persisted.settings,
+                runtime.channel_points_status.phase == crate::models::ChannelPointsPhase::Live,
+            )
+        });
+
         OverlayState {
             playing,
+            paused,
             title: probe.title.clone(),
             artist: probe.artist.clone(),
             album: probe.album.clone(),
             artwork_url: probe.artwork_url.clone(),
-            requested_by,
+            requested_with_points: request
+                .as_ref()
+                .is_some_and(|request| request.source == "channel-points"),
+            requested_by: request.map(|request| request.requested_by),
+            position_ms: current_position(probe, chrono::Utc::now()),
+            duration_ms: probe.duration_ms,
             show_queue: settings.show_queue,
             queue,
+            hint,
         }
     }
 }
@@ -103,4 +118,75 @@ pub(super) fn current_request(runtime: &RuntimeState) -> Option<crate::models::N
             source: item.source.clone(),
         })
     })
+}
+
+/// The track position now: the player's last report, advanced by the time
+/// since while it's playing. Reports only arrive every couple of seconds.
+fn current_position(probe: &ProbeSnapshot, now: chrono::DateTime<chrono::Utc>) -> Option<i64> {
+    let reported = probe.position_ms?;
+    let mut position = reported;
+    if probe.status.eq_ignore_ascii_case("playing") {
+        let since = probe
+            .updated_at
+            .as_deref()
+            .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+            .map(|at| now.signed_duration_since(at).num_milliseconds().max(0))
+            .unwrap_or(0);
+        position += since;
+    }
+    Some(match probe.duration_ms {
+        Some(duration) => position.min(duration),
+        None => position,
+    })
+}
+
+/// How viewers can ask for a song, in one line.
+fn request_hint(settings: &crate::models::AppSettings, points_live: bool) -> String {
+    let command = settings.twitch.request_command.trim();
+    let cost = settings.channel_points.cost;
+    match (points_live, settings.channel_points.points_only) {
+        (true, true) => format!("Request a song: {cost} channel points"),
+        (true, false) => format!("Request a song: {command} + name, or {cost} points"),
+        _ => format!("Request a song: {command} + name"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn probe(status: &str, position: i64, updated: &str) -> ProbeSnapshot {
+        ProbeSnapshot {
+            status: status.to_string(),
+            position_ms: Some(position),
+            duration_ms: Some(200_000),
+            updated_at: Some(updated.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn position_advances_only_while_playing() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-09-29T12:00:03Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let reported = "2026-09-29T12:00:00Z";
+        assert_eq!(current_position(&probe("Playing", 10_000, reported), now), Some(13_000));
+        assert_eq!(current_position(&probe("Paused", 10_000, reported), now), Some(10_000));
+        // Never past the end of the track.
+        assert_eq!(current_position(&probe("Playing", 199_000, reported), now), Some(200_000));
+    }
+
+    #[test]
+    fn hint_matches_how_requests_are_taken() {
+        let mut settings = crate::models::AppSettings::default();
+        settings.twitch.request_command = "!sr".into();
+        settings.channel_points.cost = 500;
+        assert_eq!(request_hint(&settings, false), "Request a song: !sr + name");
+        assert_eq!(request_hint(&settings, true), "Request a song: !sr + name, or 500 points");
+        settings.channel_points.points_only = true;
+        assert_eq!(request_hint(&settings, true), "Request a song: 500 channel points");
+        // Points-only only applies while the reward is actually live.
+        assert_eq!(request_hint(&settings, false), "Request a song: !sr + name");
+    }
 }

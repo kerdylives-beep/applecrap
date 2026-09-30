@@ -90,6 +90,7 @@ const defaultSettings: AppSettings = {
     port: 4747,
     showQueue: true,
     queueCount: 3,
+    showHint: true,
   },
   channelPoints: {
     enabled: false,

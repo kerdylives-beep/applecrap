@@ -18,6 +18,21 @@ use crate::{app::AppContext, models::LogLevel};
 
 const OVERLAY_HTML: &str = include_str!("../scripts/overlay.html");
 
+// The app's own typefaces, served so the overlay looks the same in OBS
+// without reaching the internet.
+const FONT_DISPLAY_600: &[u8] = include_bytes!(
+    "../../../node_modules/@fontsource/saira-semi-condensed/files/saira-semi-condensed-latin-600-normal.woff2"
+);
+const FONT_DISPLAY_700: &[u8] = include_bytes!(
+    "../../../node_modules/@fontsource/saira-semi-condensed/files/saira-semi-condensed-latin-700-normal.woff2"
+);
+const FONT_TEXT_400: &[u8] = include_bytes!(
+    "../../../node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff2"
+);
+const FONT_TEXT_500: &[u8] = include_bytes!(
+    "../../../node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-500-normal.woff2"
+);
+
 /// Accept loop. Runs until the task is aborted (settings change or shutdown).
 pub async fn serve(context: Arc<AppContext>, port: u16) {
     // Loopback only: nothing about this should be reachable from the network,
@@ -84,6 +99,10 @@ async fn handle_connection(context: Arc<AppContext>, mut stream: TcpStream, port
             write_response(&mut stream, "200 OK", "text/html; charset=utf-8", OVERLAY_HTML.as_bytes())
                 .await
         }
+        "/fonts/display-600.woff2" => write_font(&mut stream, FONT_DISPLAY_600).await,
+        "/fonts/display-700.woff2" => write_font(&mut stream, FONT_DISPLAY_700).await,
+        "/fonts/text-400.woff2" => write_font(&mut stream, FONT_TEXT_400).await,
+        "/fonts/text-500.woff2" => write_font(&mut stream, FONT_TEXT_500).await,
         "/state" | "/state.json" => {
             let state = context.overlay_state().await;
             let body = serde_json::to_vec(&state)?;
@@ -157,6 +176,10 @@ async fn read_request(stream: &mut TcpStream) -> Result<Option<Request>> {
         path: path.to_string(),
         host,
     }))
+}
+
+async fn write_font(stream: &mut TcpStream, font: &[u8]) -> Result<()> {
+    write_response(stream, "200 OK", "font/woff2", font).await
 }
 
 async fn write_response(

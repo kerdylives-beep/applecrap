@@ -34,7 +34,8 @@ export function Overlay({ store, state }: { store: AppStore; state: AppState }) 
         </div>
         <p className={s.hint}>
           Add this address as a <strong>Browser</strong> source in OBS. It shows the song playing, who asked for it, and what's
-          next. The background is see-through, and it hides itself when nothing is playing.
+          next. The background is see-through, it hides itself when nothing is playing, and long titles scroll instead of
+          changing its size.
         </p>
         <div className={s.urlBox}>
           <code>{url}</code>
@@ -45,7 +46,9 @@ export function Overlay({ store, state }: { store: AppStore; state: AppState }) 
             Preview
           </button>
         </div>
-        <p className={s.hint}>Size in OBS: 560 × 220 (or 560 × 120 without "next up").</p>
+        <p className={s.hint}>
+          Size in OBS: width 560. Height 300 with three songs up next and the request line, or 150 for just the song.
+        </p>
       </section>
       <section className={s.section}>
         <span className={s.label}>Options</span>
@@ -56,6 +59,10 @@ export function Overlay({ store, state }: { store: AppStore; state: AppState }) 
         <label className={s.check}>
           <input type="checkbox" checked={draft.showQueue} onChange={(event) => store.updateDraft('overlay', { showQueue: event.target.checked })} />
           Show what's next up
+        </label>
+        <label className={s.check}>
+          <input type="checkbox" checked={draft.showHint} onChange={(event) => store.updateDraft('overlay', { showHint: event.target.checked })} />
+          Show viewers how to request (the chat command, and the Channel Points cost when that's on)
         </label>
         <div className={s.grid2}>
           <label className={s.field}>

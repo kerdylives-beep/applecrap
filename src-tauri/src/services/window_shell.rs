@@ -33,7 +33,9 @@ fn validate_external_target(target: &str) -> Result<()> {
 /// a port number rather than accepted from the caller, so this cannot become a
 /// general "open any link" hole alongside the Apple-Music-only rule above.
 pub fn open_overlay_preview(port: u16) -> Result<()> {
-    let target = format!("http://127.0.0.1:{port}/");
+    // ?preview shows the overlay over a stand-in scene instead of a blank
+    // page, since in OBS it sits on top of your stream.
+    let target = format!("http://127.0.0.1:{port}/?preview");
     let mut command = Command::new("rundll32.exe");
     command.args(["url.dll,FileProtocolHandler", &target]);
     hide_command_window(&mut command);

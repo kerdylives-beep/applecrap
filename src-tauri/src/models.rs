@@ -272,13 +272,23 @@ pub struct ChannelPointsStatus {
 #[serde(rename_all = "camelCase")]
 pub struct OverlayState {
     pub playing: bool,
+    /// A track is loaded but not moving.
+    pub paused: bool,
     pub title: String,
     pub artist: String,
     pub album: String,
     pub artwork_url: Option<String>,
     pub requested_by: Option<String>,
+    /// The request was a Channel Points redemption.
+    pub requested_with_points: bool,
+    /// Where the track is right now (advanced from the last player report)
+    /// and how long it is, when known.
+    pub position_ms: Option<i64>,
+    pub duration_ms: Option<i64>,
     pub show_queue: bool,
     pub queue: Vec<OverlayQueueItem>,
+    /// "Request a song: !sr + name, or 500 points", when turned on.
+    pub hint: Option<String>,
 }
 
 #[derive(Clone, Serialize, Debug, Default)]
@@ -297,6 +307,9 @@ pub struct OverlaySettings {
     pub port: u16,
     pub show_queue: bool,
     pub queue_count: u8,
+    /// Tell viewers how to request (the chat command, and the reward's cost
+    /// while Channel Points requests are live).
+    pub show_hint: bool,
 }
 
 impl Default for OverlaySettings {
@@ -306,6 +319,7 @@ impl Default for OverlaySettings {
             port: 4747,
             show_queue: true,
             queue_count: 3,
+            show_hint: true,
         }
     }
 }
@@ -709,6 +723,7 @@ pub struct OverlaySettingsPatch {
     pub port: Option<u16>,
     pub show_queue: Option<bool>,
     pub queue_count: Option<u8>,
+    pub show_hint: Option<bool>,
 }
 
 #[derive(Clone, Deserialize, Debug)]
@@ -835,6 +850,9 @@ impl AppSettings {
             }
             if let Some(queue_count) = overlay.queue_count {
                 self.overlay.queue_count = queue_count;
+            }
+            if let Some(show_hint) = overlay.show_hint {
+                self.overlay.show_hint = show_hint;
             }
         }
 
