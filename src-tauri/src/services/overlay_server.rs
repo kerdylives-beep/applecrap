@@ -37,18 +37,28 @@ const FONT_TEXT_500: &[u8] = include_bytes!(
 pub async fn serve(context: Arc<AppContext>, port: u16) {
     // Loopback only: nothing about this should be reachable from the network,
     // and binding localhost also avoids a Windows firewall prompt.
-    let listener = match TcpListener::bind(("127.0.0.1", port)).await {
-        Ok(listener) => listener,
-        Err(error) => {
-            context
-                .add_log(
-                    LogLevel::Warn,
-                    format!(
-                        "Overlay server could not start on port {port}: {error}. Pick another port in the Overlay panel."
-                    ),
-                )
-                .await;
-            return;
+    // The port can take a moment to come free when the previous run of the
+    // app is still exiting, so a busy port gets a few retries.
+    let mut attempt = 0;
+    let listener = loop {
+        match TcpListener::bind(("127.0.0.1", port)).await {
+            Ok(listener) => break listener,
+            Err(error) if error.kind() == std::io::ErrorKind::AddrInUse && attempt < 10 => {
+                attempt += 1;
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            }
+            Err(error) => {
+                context
+                    .add_log(
+                        LogLevel::Warn,
+                        format!("Overlay server could not start on port {port}: {error}."),
+                    )
+                    .await;
+                if error.kind() == std::io::ErrorKind::AddrInUse {
+                    context.report_overlay_port_busy(port).await;
+                }
+                return;
+            }
         }
     };
 

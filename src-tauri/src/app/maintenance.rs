@@ -81,6 +81,11 @@ impl AppContext {
         )
         .await;
 
+        // Let go of the overlay's port and our Twitch connections before the
+        // new version starts, so it can take them over.
+        let chat_was_live = self.runtime.read().await.bot_status.connected;
+        self.release_network_for_restart().await;
+
         let installed = update_guard::Layout::current().and_then(|layout| {
             update_guard::install(
                 &layout,
@@ -91,6 +96,12 @@ impl AppContext {
         if let Err(error) = installed {
             self.add_log(LogLevel::Error, format!("Update install failed: {error}"))
                 .await;
+            // Still running this version: put everything back.
+            self.sync_overlay_server().await;
+            self.sync_channel_points().await;
+            if chat_was_live {
+                let _ = self.connect_bot().await;
+            }
             return CommandResult::error(format!(
                 "Update failed: {error}. You can download it manually from {}.",
                 update.release_url
@@ -104,6 +115,18 @@ impl AppContext {
         });
 
         CommandResult::ok("Update installed. Restarting...")
+    }
+
+    /// Closes the overlay server and the Twitch connections ahead of a
+    /// restart into another process.
+    pub(super) async fn release_network_for_restart(&self) {
+        if let Some((_, task)) = self.overlay_task.lock().await.take() {
+            task.abort();
+        }
+        self.stop_channel_points_listener().await;
+        self.abort_twitch_connection().await;
+        // Aborted tasks drop their sockets on their next poll.
+        tokio::time::sleep(Duration::from_millis(300)).await;
     }
 
     /// The UI loaded: if this run is a fresh update on probation, it passed.

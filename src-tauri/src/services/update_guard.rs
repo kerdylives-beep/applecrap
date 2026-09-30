@@ -23,6 +23,10 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 pub const WATCHDOG_FLAG: &str = "--update-watchdog";
+/// `<exe> --relaunch-when-free <port>`: wait for the port, then start the app.
+pub const RELAUNCH_FLAG: &str = "--relaunch-when-free";
+/// Passed to an app started by the relaunch helper, so it never loops.
+pub const RELAUNCHED_FLAG: &str = "--relaunched";
 /// How long a new version gets to show its UI. Generous: a cold WebView2
 /// start on a slow machine can take a while.
 const PROBATION: Duration = Duration::from_secs(180);
@@ -175,21 +179,73 @@ pub fn install(layout: &Layout, from: &str, to: &str) -> Result<()> {
         phase: Phase::Probation,
     })?;
 
-    let child = std::process::Command::new(layout.exe())
-        .spawn()
+    let child = spawn_clean(layout.exe(), &[])
         .context("The update installed but the new version failed to launch. Start it manually.")?;
 
     // Best effort: without the watchdog the update still works, it just
     // can't undo itself.
-    let _ = std::process::Command::new(layout.old())
-        .arg(WATCHDOG_FLAG)
-        .arg(child.id().to_string())
-        .spawn();
+    let _ = spawn_clean(&layout.old(), &[WATCHDOG_FLAG, &child.to_string()]);
     Ok(())
 }
 
 /// Entry point for `<name>.old --update-watchdog <pid>`. Returns the exit
 /// code, or `None` when this isn't a watchdog launch.
+/// Starts a process that inherits nothing from this one. The standard
+/// launcher lets a child inherit open handles; during an update that handed
+/// the old version's overlay socket to the new one, which then held port
+/// 4747 without ever answering on it.
+pub fn spawn_clean(exe: &Path, args: &[&str]) -> Result<u32> {
+    process::spawn_clean(exe, args)
+}
+
+/// True on the first run of a version this machine just updated to.
+pub fn first_run_after_update(layout: &Layout, running_version: &str) -> bool {
+    layout
+        .read_record()
+        .is_some_and(|record| record.to == running_version && record.phase != Phase::RolledBack)
+}
+
+/// Waits (up to `limit`) for the update to be marked healthy, so a restart
+/// can't be mistaken for a crash by the watchdog.
+pub fn wait_until_healthy(layout: &Layout, limit: Duration) -> bool {
+    let started = Instant::now();
+    while started.elapsed() < limit {
+        if layout
+            .read_record()
+            .is_some_and(|record| record.phase == Phase::Healthy)
+        {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    false
+}
+
+/// Entry point for `<exe> --relaunch-when-free <port>`: waits until nothing
+/// holds the port (the previous run and anything it left behind have gone),
+/// then starts the app again. Returns `None` when this isn't that launch.
+pub fn run_relauncher_if_requested() -> Option<i32> {
+    let mut args = std::env::args().skip(1);
+    if args.next().as_deref() != Some(RELAUNCH_FLAG) {
+        return None;
+    }
+    let port: u16 = args.next()?.parse().ok()?;
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_secs(30) {
+        if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    let Ok(exe) = std::env::current_exe() else {
+        return Some(1);
+    };
+    Some(match spawn_clean(&exe, &[RELAUNCHED_FLAG]) {
+        Ok(_) => 0,
+        Err(_) => 1,
+    })
+}
+
 pub fn run_watchdog_if_requested() -> Option<i32> {
     let mut args = std::env::args().skip(1);
     if args.next().as_deref() != Some(WATCHDOG_FLAG) {
@@ -219,7 +275,7 @@ fn watch(layout: &Layout, pid: u32) -> i32 {
             }
             return match roll_back(layout) {
                 Ok(()) => {
-                    let _ = std::process::Command::new(layout.exe()).spawn();
+                    let _ = spawn_clean(layout.exe(), &[]);
                     0
                 }
                 Err(_) => 1,
@@ -253,13 +309,89 @@ pub fn roll_back(layout: &Layout) -> Result<()> {
 
 #[cfg(windows)]
 mod process {
-    use windows::Win32::{
-        Foundation::{CloseHandle, WAIT_TIMEOUT},
-        System::Threading::{
-            OpenProcess, TerminateProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
-            PROCESS_TERMINATE,
+    use std::{os::windows::ffi::OsStrExt, path::Path};
+
+    use anyhow::{anyhow, Result};
+    use windows::{
+        core::{PCWSTR, PWSTR},
+        Win32::{
+            Foundation::{CloseHandle, WAIT_TIMEOUT},
+            System::Threading::{
+                CreateProcessW, OpenProcess, TerminateProcess, WaitForSingleObject,
+                PROCESS_CREATION_FLAGS, PROCESS_INFORMATION, PROCESS_SYNCHRONIZE,
+                PROCESS_TERMINATE, STARTUPINFOW,
+            },
         },
     };
+
+    /// Quotes one command-line argument the way Windows programs parse it.
+    fn quote(arg: &str) -> String {
+        if !arg.is_empty() && !arg.contains([' ', '\t', '"']) {
+            return arg.to_string();
+        }
+        let mut quoted = String::from('"');
+        let mut backslashes = 0;
+        for character in arg.chars() {
+            match character {
+                '\\' => backslashes += 1,
+                '"' => {
+                    quoted.push_str(&"\\".repeat(backslashes * 2 + 1));
+                    quoted.push('"');
+                    backslashes = 0;
+                }
+                other => {
+                    quoted.push_str(&"\\".repeat(backslashes));
+                    quoted.push(other);
+                    backslashes = 0;
+                }
+            }
+        }
+        quoted.push_str(&"\\".repeat(backslashes * 2));
+        quoted.push('"');
+        quoted
+    }
+
+    pub fn command_line(exe: &Path, args: &[&str]) -> String {
+        std::iter::once(quote(&exe.to_string_lossy()))
+            .chain(args.iter().map(|arg| quote(arg)))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// CreateProcessW with handle inheritance off: the child gets none of
+    /// this process's sockets, files or pipes.
+    pub fn spawn_clean(exe: &Path, args: &[&str]) -> Result<u32> {
+        let application: Vec<u16> = exe.as_os_str().encode_wide().chain([0]).collect();
+        let mut command: Vec<u16> = command_line(exe, args).encode_utf16().chain([0]).collect();
+        let directory: Option<Vec<u16>> = exe
+            .parent()
+            .map(|dir| dir.as_os_str().encode_wide().chain([0]).collect());
+        let startup = STARTUPINFOW {
+            cb: std::mem::size_of::<STARTUPINFOW>() as u32,
+            ..Default::default()
+        };
+        let mut info = PROCESS_INFORMATION::default();
+        unsafe {
+            CreateProcessW(
+                PCWSTR(application.as_ptr()),
+                Some(PWSTR(command.as_mut_ptr())),
+                None,
+                None,
+                false,
+                PROCESS_CREATION_FLAGS(0),
+                None,
+                directory
+                    .as_ref()
+                    .map_or(PCWSTR::null(), |dir| PCWSTR(dir.as_ptr())),
+                &startup,
+                &mut info,
+            )
+            .map_err(|error| anyhow!("could not start {}: {error}", exe.display()))?;
+            let _ = CloseHandle(info.hThread);
+            let _ = CloseHandle(info.hProcess);
+        }
+        Ok(info.dwProcessId)
+    }
 
     pub fn is_running(pid: u32) -> bool {
         unsafe {
@@ -284,6 +416,9 @@ mod process {
 
 #[cfg(not(windows))]
 mod process {
+    pub fn spawn_clean(exe: &std::path::Path, args: &[&str]) -> anyhow::Result<u32> {
+        Ok(std::process::Command::new(exe).args(args).spawn()?.id())
+    }
     pub fn is_running(_pid: u32) -> bool {
         false
     }
@@ -389,6 +524,61 @@ mod tests {
             .status()
             .unwrap();
         assert!(status.success());
+    }
+
+    /// The update launcher must hand the new version nothing: a socket the
+    /// old version had open must close when the old version lets go of it.
+    #[cfg(windows)]
+    #[test]
+    fn a_clean_spawn_inherits_no_sockets() {
+        // An inheritable socket, the worst case.
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        unsafe {
+            use std::os::windows::io::AsRawSocket;
+            use windows::Win32::Foundation::{SetHandleInformation, HANDLE, HANDLE_FLAG_INHERIT};
+            SetHandleInformation(
+                HANDLE(listener.as_raw_socket() as *mut std::ffi::c_void),
+                HANDLE_FLAG_INHERIT.0,
+                HANDLE_FLAG_INHERIT,
+            )
+            .unwrap();
+        }
+        let pid = spawn_clean(
+            Path::new(r"C:\Windows\System32\PING.EXE"),
+            &["-n", "4", "127.0.0.1"],
+        )
+        .unwrap();
+        drop(listener);
+        std::thread::sleep(Duration::from_millis(300));
+        let rebound = std::net::TcpListener::bind(("127.0.0.1", port));
+        process::terminate(pid);
+        assert!(rebound.is_ok(), "the child kept the socket open");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn command_lines_are_quoted_for_windows() {
+        assert_eq!(
+            process::command_line(Path::new(r"C:\A B\app.exe"), &["--x", "1"]),
+            r#""C:\A B\app.exe" --x 1"#
+        );
+        assert_eq!(
+            process::command_line(Path::new("a.exe"), &["say \"hi\""]),
+            r#"a.exe "say \"hi\"""#
+        );
+    }
+
+    #[test]
+    fn first_run_after_update_is_recognised() {
+        let (_dir, layout) = layout();
+        assert!(!first_run_after_update(&layout, "0.5.0-beta.1"));
+        probation(&layout);
+        assert!(first_run_after_update(&layout, "0.5.0-beta.1"));
+        assert!(!first_run_after_update(&layout, "0.4.0-alpha.1"));
+        mark_healthy(&layout, "0.5.0-beta.1");
+        assert!(first_run_after_update(&layout, "0.5.0-beta.1"));
+        assert!(wait_until_healthy(&layout, Duration::from_millis(10)));
     }
 
     #[test]

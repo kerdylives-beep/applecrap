@@ -13,6 +13,10 @@ pub fn run_update_watchdog_if_requested() -> Option<i32> {
     services::update_guard::run_watchdog_if_requested()
 }
 
+pub fn run_relauncher_if_requested() -> Option<i32> {
+    services::update_guard::run_relauncher_if_requested()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()

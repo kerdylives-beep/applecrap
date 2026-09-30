@@ -1,5 +1,7 @@
 //! The OBS overlay server and the state it renders.
 
+use crate::services::update_guard;
+
 use super::*;
 
 impl AppContext {
@@ -28,6 +30,86 @@ impl AppContext {
             overlay_server::serve(server_context, port).await;
         });
         *task = Some((port, handle));
+    }
+
+    /// The overlay's port is taken. Right after an update that is almost
+    /// always the previous version still holding it (versions before 0.6.1
+    /// passed their sockets on to the version they started), so restart once
+    /// to shake it loose. Otherwise, say so plainly.
+    /// `overlay_port_busy` behind a boxed future: it can restart the overlay
+    /// server, which can call it again, and the compiler can't prove such a
+    /// future is `Send` without this break in the cycle.
+    pub fn report_overlay_port_busy(
+        self: &Arc<Self>,
+        port: u16,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
+        let context = Arc::clone(self);
+        Box::pin(async move { context.overlay_port_busy(port).await })
+    }
+
+    async fn overlay_port_busy(self: &Arc<Self>, port: u16) {
+        let version = self.handle.package_info().version.to_string();
+        let relaunched = std::env::args().any(|arg| arg == update_guard::RELAUNCHED_FLAG);
+        let layout = update_guard::Layout::current();
+        let just_updated = layout
+            .as_ref()
+            .is_ok_and(|layout| update_guard::first_run_after_update(layout, &version));
+
+        if just_updated && !relaunched {
+            if let Ok(layout) = layout {
+                self.add_log(
+                    LogLevel::Info,
+                    format!("The previous version is still holding the overlay's port {port}; restarting AppleCrap once to free it."),
+                )
+                .await;
+                let context = Arc::clone(self);
+                tauri::async_runtime::spawn(async move {
+                    // Restarting before the update proves itself would look
+                    // like a crash to the rollback watchdog.
+                    let healthy = tauri::async_runtime::spawn_blocking(move || {
+                        update_guard::wait_until_healthy(&layout, std::time::Duration::from_secs(180))
+                    })
+                    .await
+                    .unwrap_or(false);
+                    if !healthy {
+                        return;
+                    }
+                    // Give the watchdog a moment to see it and step down.
+                    tokio::time::sleep(Duration::from_secs(3)).await;
+                    context.restart_when_port_free(port).await;
+                });
+                return;
+            }
+        }
+
+        self.raise_alert(crate::models::Alert {
+            id: "overlay-port".into(),
+            tone: crate::models::AlertTone::Warn,
+            title: "The OBS overlay couldn't start".into(),
+            detail: format!(
+                "Port {port} is in use. Close and reopen AppleCrap; if that doesn't fix it, pick another port on the Overlay page."
+            ),
+            action: None,
+        })
+        .await;
+    }
+
+    /// Hands off to a helper that starts the app again once nothing holds
+    /// the overlay's port, then exits.
+    async fn restart_when_port_free(self: &Arc<Self>, port: u16) {
+        let Ok(exe) = std::env::current_exe() else {
+            return;
+        };
+        self.release_network_for_restart().await;
+        self.flush_pending_state().await;
+        match update_guard::spawn_clean(&exe, &[update_guard::RELAUNCH_FLAG, &port.to_string()]) {
+            Ok(_) => self.handle.exit(0),
+            Err(error) => {
+                self.add_log(LogLevel::Warn, format!("Couldn't restart AppleCrap: {error}"))
+                    .await;
+                self.sync_overlay_server().await;
+            }
+        }
     }
 
     /// Snapshot for the OBS overlay: what is playing, who asked for it, and

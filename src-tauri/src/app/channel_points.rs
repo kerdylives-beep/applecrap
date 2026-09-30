@@ -320,7 +320,7 @@ impl AppContext {
         *listener = Some((listening, task));
     }
 
-    async fn stop_channel_points_listener(&self) {
+    pub(super) async fn stop_channel_points_listener(&self) {
         if let Some((_, task)) = self.channel_points_listener.lock().await.take() {
             task.abort();
         }

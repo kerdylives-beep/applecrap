@@ -6,5 +6,10 @@ fn main() {
     if let Some(code) = applecrap_alpha_lib::run_update_watchdog_if_requested() {
         std::process::exit(code);
     }
+    // Or a helper restarting the app once the old run has let go of the
+    // overlay's port.
+    if let Some(code) = applecrap_alpha_lib::run_relauncher_if_requested() {
+        std::process::exit(code);
+    }
     applecrap_alpha_lib::run();
 }
