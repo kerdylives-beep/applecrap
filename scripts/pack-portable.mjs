@@ -29,6 +29,8 @@ await fs.rm(portableDir, { recursive: true, force: true })
 await fs.mkdir(path.join(portableDir, 'data'), { recursive: true })
 await fs.copyFile(sourceExecutable, path.join(portableDir, 'AppleCrap.exe'))
 await fs.writeFile(path.join(portableDir, 'README.txt'), buildPortableReadme(), 'utf8')
+// The GPL travels with every copy.
+await fs.copyFile(path.join(process.cwd(), 'LICENSE'), path.join(portableDir, 'LICENSE.txt'))
 
 await compressDirectory(portableDir, portableZip)
 console.log(`Portable build created:\n- ${portableDir}\n- ${portableZip}`)
@@ -94,6 +96,9 @@ function buildPortableReadme() {
     '',
     'Something wrong? Help > Report a problem saves a report and opens an',
     'email to send it with.',
+    '',
+    'AppleCrap is free software under the GNU General Public License v3.0',
+    '(see LICENSE.txt). Source code: https://github.com/kerdylives-beep/applecrap',
     '',
   ].join('\n')
 }
