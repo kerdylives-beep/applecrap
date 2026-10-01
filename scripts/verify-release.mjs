@@ -60,11 +60,15 @@ const executables = listing.filter((name) => name.toLowerCase().endsWith('.exe')
 if (executables.length !== 1) {
   failures.push(`expected exactly one .exe in the zip, found ${executables.length}`)
 }
+const allowed = ['.exe', 'readme.txt', 'license.txt']
 const unexpected = listing.filter(
-  (name) => !name.toLowerCase().endsWith('.exe') && !name.toLowerCase().endsWith('readme.txt') && !name.endsWith('/'),
+  (name) => !allowed.some((ending) => name.toLowerCase().endsWith(ending)) && !name.endsWith('/'),
 )
 if (unexpected.length) {
   failures.push(`unexpected files in the zip: ${unexpected.join(', ')}`)
+}
+if (!listing.some((name) => name.toLowerCase().endsWith('license.txt'))) {
+  failures.push('the zip is missing LICENSE.txt (the GPL has to ship with every copy)')
 }
 if (listing.some((name) => /(^|\/)data\/.+/i.test(name))) {
   failures.push('the zip contains a data folder with files in it')

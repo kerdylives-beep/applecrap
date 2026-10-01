@@ -255,3 +255,14 @@ Twitch request or redemption -> Apple Music match -> auto-queue (Play Next) -> p
 ```
 
 Bug reports, screenshots, and real streamer workflow notes are very welcome.
+
+## License
+
+AppleCrap is free software: you can use it, study it, change it and share it under the
+[GNU General Public License v3.0](LICENSE). If you share a modified version, it has to stay open
+source under the same license; nobody gets to sell a closed copy.
+
+The license covers the code. The AppleCrap and Crabapple names, the app icon and the mascot
+artwork are not licensed for use in other projects; please give your fork its own name and look.
+
+Bundled fonts and libraries keep their own licenses; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
