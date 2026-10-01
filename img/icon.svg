@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bubble" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff7088"/><stop offset="1" stop-color="#ee2340"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#3a9d57"/><stop offset="1" stop-color="#8fdc86"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="230" fill="#141821"/>
+  <!-- chat bubble, kept inside the headphone band so no corner pokes out -->
+  <path d="M270 360 H754 A70 70 0 0 1 824 430 V680 A70 70 0 0 1 754 750 H440 L290 860 L320 750 H270 A70 70 0 0 1 200 680 V430 A70 70 0 0 1 270 360 Z" fill="url(#bubble)"/>
+  <!-- headphone band -->
+  <path d="M215 560 V470 a297 297 0 0 1 594 0 V560" fill="none" stroke="#f2efea" stroke-width="54" stroke-linecap="round"/>
+  <!-- ear cups -->
+  <rect x="150" y="470" width="130" height="230" rx="56" fill="#f2efea"/>
+  <rect x="744" y="470" width="130" height="230" rx="56" fill="#f2efea"/>
+  <rect x="185" y="505" width="60" height="160" rx="30" fill="#2a303b"/>
+  <rect x="779" y="505" width="60" height="160" rx="30" fill="#2a303b"/>
+  <!-- equalizer bars -->
+  <g fill="#141821">
+    <rect x="365" y="560" width="54" height="90" rx="27"/>
+    <rect x="445" y="455" width="54" height="195" rx="27"/>
+    <rect x="525" y="505" width="54" height="145" rx="27"/>
+    <rect x="605" y="425" width="54" height="225" rx="27"/>
+  </g>
+  <!-- crabapple stem and leaf on the band -->
+  <path d="M512 175 C512 130 520 95 540 62" fill="none" stroke="#6b3b2a" stroke-width="34" stroke-linecap="round"/>
+  <path d="M548 92 C600 30 700 28 760 58 C715 120 620 140 548 92 Z" fill="url(#leaf)"/>
+</svg>
