@@ -15,4 +15,5 @@ pub mod twitch_auth;
 pub mod twitch_service;
 pub mod update_guard;
 pub mod updater;
+pub mod window_icon;
 pub mod window_shell;

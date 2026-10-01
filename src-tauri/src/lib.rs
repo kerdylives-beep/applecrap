@@ -92,6 +92,7 @@ pub fn run() {
                 }
 
                 let player = player_builder.build()?;
+                services::window_icon::keep_sharp(&player);
 
                 let player_handle = player.clone();
                 player.on_window_event(move |event| {
@@ -140,6 +141,7 @@ pub fn run() {
                 // only hides), so closing the main window must end the app or
                 // the player keeps the process alive in the background.
                 if let Some(main) = app.get_webview_window("main") {
+                    services::window_icon::keep_sharp(&main);
                     let exit_handle = app.handle().clone();
                     main.on_window_event(move |event| {
                         if let tauri::WindowEvent::Destroyed = event {
