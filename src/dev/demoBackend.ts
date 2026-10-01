@@ -52,7 +52,17 @@ const settings: AppSettings = {
   },
   appleMusic: { storefront: 'us' },
   player: { autoQueue: true, audioOutputDevice: '', mediaKeys: true },
-  overlay: { enabled: true, port: 4747, showQueue: true, queueCount: 3, showHint: true },
+  overlay: {
+    enabled: true,
+    port: 4747,
+    showQueue: true,
+    queueCount: 3,
+    showHint: true,
+    style: 'card',
+    artColors: true,
+    showWhilePaused: true,
+    popUpSeconds: 0,
+  },
   channelPoints: { enabled: true, title: 'Request a song', cost: 500, pointsOnly: false },
 }
 

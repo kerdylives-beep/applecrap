@@ -87,15 +87,26 @@ reaches viewers. The current bitrate is shown under the now-playing card.
 AppleCrap serves a now-playing overlay for OBS on your own machine.
 
 1. Open the **Overlay** panel in the app and copy the URL (`http://127.0.0.1:4747/` by default).
-2. In OBS, add a **Browser** source and paste it in. Make it **560 wide**, and **300 tall** for three songs up next plus the request line (150 for just the song).
+2. In OBS, add a **Browser** source and paste it in, sized **560 x 320** (that fits every style with three songs up next).
 3. That is it — the background is transparent, so it sits straight over your scene.
 
 It shows the current song with its artwork, who requested it and how far through it is, what is
 queued up next, and how viewers can request (the chat command, plus the Channel Points cost when
-that's on). It stays the same width no matter the song: long titles drift across instead. It fades
-itself out when nothing is playing, so an idle scene stays clean. The Overlay page can turn the
-"next up" list or the request line off, change how many upcoming songs it lists, or move it to
-another port; **Preview** shows it over a stand-in scene.
+that's on). It stays the same width no matter the song: long titles drift across instead.
+
+Pick a style on the Overlay page, where a live preview shows the real thing:
+
+- **Card** — artwork, song and progress.
+- **Compact** — one slim line.
+- **Backdrop** — the album cover blurred behind the text.
+- **Vinyl** — the cover as the label of a spinning record that stops when the song is paused.
+
+By default its colors follow each song's album art. It can also pop up for a few seconds when a song
+starts instead of staying on screen, hide while paused, drop the "next up" list or the request line,
+or move to another port.
+
+Style ideas, like colors taken from the album art, were inspired by
+[nutty's Now Playing widget](https://nutty.gg/).
 
 ## Channel Points Requests
 

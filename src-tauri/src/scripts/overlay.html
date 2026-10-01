@@ -10,7 +10,9 @@
   @font-face { font-family: 'IBM Plex Sans'; font-weight: 500; src: url('/fonts/text-500.woff2') format('woff2'); }
 
   /* Same palette as the app: warm near-black, amber for music, violet for
-     Twitch. The page itself is transparent; OBS lays it over the scene. */
+     Twitch. With "colors from the album art" on, --accent and --tint follow
+     each song's artwork. The page itself is transparent; OBS lays it over
+     the scene. */
   :root {
     --card: rgba(18, 17, 20, 0.9);
     --chip: rgba(18, 17, 20, 0.84);
@@ -18,11 +20,15 @@
     --text: #f2efea;
     --muted: #c8c3cc;
     --dim: #8a8591;
-    --accent: #f2a93b;
-    --accent-soft: #2b2119;
     --twitch: #c9beff;
     --twitch-soft: #2a2440;
-    /* Fixed, so a long title never resizes the source in OBS. */
+  }
+
+  #root {
+    --accent: #f2a93b;
+    --accent-soft: #2b2119;
+    --tint: var(--card);
+    /* Fixed per style, so a long title never resizes the source in OBS. */
     --width: 520px;
   }
 
@@ -77,7 +83,10 @@
     transform: translateY(0);
   }
 
+  /* ---- Card (the standard style) ---------------------------------------- */
+
   .card {
+    position: relative;
     display: grid;
     grid-template-columns: 76px minmax(0, 1fr);
     align-items: center;
@@ -85,13 +94,22 @@
     width: var(--width);
     padding: 12px;
     border-radius: 14px;
-    background: var(--card);
+    background: var(--tint);
     border: 1px solid var(--line);
+    overflow: hidden;
+    transition: background-color 600ms ease;
+  }
+
+  .art-wrap {
+    position: relative;
+    width: 76px;
+    height: 76px;
   }
 
   .art {
-    width: 76px;
-    height: 76px;
+    display: block;
+    width: 100%;
+    height: 100%;
     border-radius: 10px;
     object-fit: cover;
     background: var(--accent-soft);
@@ -105,7 +123,10 @@
     color: var(--accent);
   }
 
+  .hole, .backdrop { display: none; }
+
   .meta {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -130,7 +151,7 @@
     animation: pulse 2s ease-in-out infinite;
   }
 
-  .paused .pulse { animation: none; opacity: 0.5; }
+  .is-paused .pulse { animation: none; opacity: 0.5; }
 
   @keyframes pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
@@ -158,7 +179,7 @@
     font-size: 11px;
   }
 
-  /* Text wider than the card drifts to its end and back instead of being
+  /* Text wider than its box drifts to its end and back instead of being
      cut off or stretching the overlay. */
   .marquee {
     overflow: hidden;
@@ -188,18 +209,104 @@
     height: 3px;
     margin-top: 7px;
     border-radius: 2px;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.1);
     overflow: hidden;
   }
-
 
   .progress-fill {
     height: 100%;
     width: 0;
     border-radius: 2px;
     background: var(--accent);
-    transition: width 1s linear;
+    transition: width 1s linear, background-color 600ms ease;
   }
+
+  /* ---- Compact: one slim line -------------------------------------------- */
+
+  #root[data-style='compact'] { --width: 400px; }
+
+  [data-style='compact'] .card {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 11px;
+    padding: 7px 14px 7px 7px;
+    border-radius: 12px;
+  }
+
+  [data-style='compact'] .art-wrap { width: 44px; height: 44px; }
+  [data-style='compact'] .art { border-radius: 7px; }
+  [data-style='compact'] .art-fallback { font-size: 17px; }
+  [data-style='compact'] .label { display: none; }
+  [data-style='compact'] .title { font-size: 18px; }
+  [data-style='compact'] .sub { font-size: 12px; }
+  [data-style='compact'] .progress { margin-top: 4px; height: 2px; }
+
+  /* ---- Backdrop: the album art, blurred, behind everything ---------------- */
+
+  [data-style='backdrop'] .card {
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 16px;
+    padding: 16px;
+    background: rgba(10, 10, 12, 0.6);
+  }
+
+  [data-style='backdrop'] .backdrop {
+    display: block;
+    position: absolute;
+    inset: -40px;
+    background: var(--tint) center / cover no-repeat;
+    background-image: var(--art-url, none);
+    filter: blur(26px) saturate(1.25) brightness(0.5);
+    transition: background-image 600ms ease;
+  }
+
+  [data-style='backdrop'] .art-wrap { width: 96px; height: 96px; }
+  [data-style='backdrop'] .art { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
+  [data-style='backdrop'] .title { font-size: 26px; }
+  [data-style='backdrop'] .progress { background: rgba(255, 255, 255, 0.16); }
+
+  /* ---- Vinyl: the art as the label of a spinning record ------------------- */
+
+  [data-style='vinyl'] .card { grid-template-columns: 92px minmax(0, 1fr); }
+
+  [data-style='vinyl'] .art-wrap {
+    width: 92px;
+    height: 92px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(circle, transparent 0 44%, rgba(255, 255, 255, 0.06) 45%, transparent 47%),
+      repeating-radial-gradient(circle, #121214 0 2px, #1d1d21 2px 3px);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 6px 18px rgba(0, 0, 0, 0.5);
+    animation: spin 5s linear infinite;
+  }
+
+  [data-style='vinyl'].is-paused .art-wrap,
+  [data-style='vinyl'] .art-wrap.stopped { animation-play-state: paused; }
+
+  [data-style='vinyl'] .art {
+    position: absolute;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+  }
+
+  [data-style='vinyl'] .art-fallback { font-size: 15px; }
+
+  [data-style='vinyl'] .hole {
+    display: block;
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #0b0b0d;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---- Next up and the request line (every style) ------------------------- */
 
   .next {
     width: var(--width);
@@ -208,7 +315,6 @@
     background: var(--chip);
     border: 1px solid var(--line);
   }
-
 
   .next-label {
     font: 600 10px 'Saira Semi Condensed', sans-serif;
@@ -277,17 +383,21 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .marquee.scrolling > span, .pulse, .bump { animation: none; }
+    .marquee.scrolling > span, .pulse, .bump, [data-style='vinyl'] .art-wrap { animation: none; }
   }
 </style>
 </head>
 <body>
-  <div id="root">
+  <div id="root" data-style="card">
     <div class="card" id="card">
-      <div class="art art-fallback" id="art-fallback"></div>
-      <img class="art" id="art" alt="" hidden />
+      <div class="backdrop" id="backdrop"></div>
+      <div class="art-wrap" id="art-wrap">
+        <div class="art art-fallback" id="art-fallback"></div>
+        <img class="art" id="art" alt="" hidden />
+        <div class="hole"></div>
+      </div>
       <div class="meta">
-        <div class="label" id="label"><span class="pulse"></span><span id="label-text">Now playing</span></div>
+        <div class="label"><span class="pulse"></span><span id="label-text">Now playing</span></div>
         <div class="marquee title" id="title"><span></span></div>
         <div class="marquee sub" id="sub"><span></span></div>
         <div class="progress" id="progress" hidden><div class="progress-fill" id="progress-fill"></div></div>
@@ -310,7 +420,7 @@
   const card = $('card')
   const art = $('art')
   const artFallback = $('art-fallback')
-  const label = $('label')
+  const backdrop = $('backdrop')
   const labelText = $('label-text')
   const titleEl = $('title')
   const subEl = $('sub')
@@ -320,23 +430,32 @@
   const nextItems = $('next-items')
   const hintEl = $('hint')
 
-  if (new URLSearchParams(location.search).has('preview')) {
+  const params = new URLSearchParams(location.search)
+  if (params.has('preview')) {
     document.body.classList.add('preview')
   }
+  // ?demo shows a sample song while nothing is playing, so a style can be
+  // judged from the app's Overlay page at any time.
+  const demo = params.has('demo')
 
   let lastTrackKey = ''
   let lastPayload = ''
   let hideTimer = null
+  let popUpUntil = 0
 
   // Fading out the instant a state blip arrives would flicker on stream, so
   // hiding waits a beat while showing is immediate.
-  function setVisible(visible) {
+  function setVisible(visible, immediately) {
     if (visible) {
       if (hideTimer !== null) {
         clearTimeout(hideTimer)
         hideTimer = null
       }
       root.classList.add('visible')
+      return
+    }
+    if (immediately) {
+      root.classList.remove('visible')
       return
     }
     if (hideTimer === null && root.classList.contains('visible')) {
@@ -380,11 +499,136 @@
     fit(el)
   }
 
+  // ---- Colors from the album art ----------------------------------------
+
+  // Picks the artwork's most vivid hue (weighted by how much of the cover it
+  // covers), then sets its lightness so text and bars stay readable on the
+  // dark card. Mostly grey covers get a neutral accent.
+  function paletteFrom(image) {
+    const size = 32
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const context = canvas.getContext('2d', { willReadFrequently: true })
+    context.drawImage(image, 0, 0, size, size)
+    const pixels = context.getImageData(0, 0, size, size).data
+
+    const bins = new Array(36).fill(null).map(() => ({ weight: 0, saturation: 0 }))
+    let colorful = 0
+    for (let index = 0; index < pixels.length; index += 4) {
+      const r = pixels[index] / 255
+      const g = pixels[index + 1] / 255
+      const b = pixels[index + 2] / 255
+      const max = Math.max(r, g, b)
+      const min = Math.min(r, g, b)
+      const lightness = (max + min) / 2
+      const chroma = max - min
+      if (chroma < 0.08 || lightness < 0.1 || lightness > 0.94) continue
+      const saturation = chroma / (1 - Math.abs(2 * lightness - 1))
+      let hue
+      if (max === r) hue = ((g - b) / chroma) % 6
+      else if (max === g) hue = (b - r) / chroma + 2
+      else hue = (r - g) / chroma + 4
+      hue = (hue * 60 + 360) % 360
+      const weight = saturation * (1 - Math.abs(lightness - 0.5))
+      const bin = bins[Math.floor(hue / 10)]
+      bin.weight += weight
+      bin.saturation += saturation * weight
+      bin.hueSum = (bin.hueSum || 0) + hue * weight
+      colorful += 1
+    }
+
+    if (colorful < (size * size) / 25) {
+      return { accent: 'hsl(30 12% 80%)', soft: 'hsl(30 6% 16%)', tint: 'hsl(30 6% 10% / 0.92)' }
+    }
+    let best = bins[0]
+    for (const bin of bins) if (bin.weight > best.weight) best = bin
+    const hue = Math.round(best.hueSum / best.weight)
+    const saturation = Math.min(90, Math.max(45, Math.round((best.saturation / best.weight) * 100)))
+    return {
+      accent: 'hsl(' + hue + ' ' + saturation + '% 66%)',
+      soft: 'hsl(' + hue + ' ' + Math.min(saturation, 40) + '% 18%)',
+      tint: 'hsl(' + hue + ' ' + Math.min(saturation, 35) + '% 10% / 0.92)',
+    }
+  }
+
+  let colorsFor = ''
+  function applyColors(url, enabled) {
+    const key = enabled ? url || '' : ''
+    if (key === colorsFor) return
+    colorsFor = key
+    if (!key) {
+      root.style.removeProperty('--accent')
+      root.style.removeProperty('--accent-soft')
+      root.style.removeProperty('--tint')
+      return
+    }
+    // A separate image with CORS on, so a server without it can't break the
+    // artwork that's on screen; Apple's artwork server allows it.
+    const probe = new Image()
+    probe.crossOrigin = 'anonymous'
+    probe.onload = function () {
+      if (colorsFor !== key) return
+      try {
+        const colors = paletteFrom(probe)
+        root.style.setProperty('--accent', colors.accent)
+        root.style.setProperty('--accent-soft', colors.soft)
+        root.style.setProperty('--tint', colors.tint)
+      } catch (_) {
+        // The image couldn't be read: keep the standard colors.
+      }
+    }
+    probe.src = url
+  }
+
+  // ---- Rendering -----------------------------------------------------------
+
+  function sampleArt() {
+    const canvas = document.createElement('canvas')
+    canvas.width = 120
+    canvas.height = 120
+    const context = canvas.getContext('2d')
+    context.fillStyle = '#1f3b5a'
+    context.fillRect(0, 0, 120, 120)
+    context.fillStyle = '#3f8fd6'
+    context.beginPath()
+    context.arc(78, 46, 34, 0, Math.PI * 2)
+    context.fill()
+    context.fillStyle = '#e4eef8'
+    context.fillRect(14, 84, 92, 8)
+    return canvas.toDataURL('image/png')
+  }
+
+  let demoArt = null
+  function demoState(state) {
+    demoArt = demoArt || sampleArt()
+    return Object.assign({}, state, {
+      playing: true,
+      paused: false,
+      title: 'Your song shows here',
+      artist: 'Artist',
+      artworkUrl: demoArt,
+      requestedBy: 'viewer',
+      requestedWithPoints: false,
+      positionMs: 64000,
+      durationMs: 200000,
+      queue: [
+        { title: 'Next request', artist: 'Another artist', requestedBy: 'someone' },
+        { title: 'And one more', artist: 'Band', requestedBy: 'chatter' },
+      ],
+    })
+  }
+
   function render(state) {
+    if (demo && !(state.playing && state.title)) {
+      state = demoState(state)
+    }
+    root.dataset.style = state.style || 'card'
     const playing = !!state.playing && !!state.title
-    setVisible(playing)
+    root.classList.toggle('is-paused', !!state.paused)
     if (!playing) {
       lastTrackKey = ''
+      setVisible(false)
       return
     }
 
@@ -392,12 +636,16 @@
     const newTrack = trackKey !== lastTrackKey
     if (newTrack) {
       lastTrackKey = trackKey
+      popUpUntil = state.popUpSeconds > 0 ? Date.now() + state.popUpSeconds * 1000 : 0
       card.classList.remove('bump')
       void card.offsetWidth
       card.classList.add('bump')
     }
 
-    label.classList.toggle('paused', !!state.paused)
+    const hiddenWhilePaused = state.paused && state.showWhilePaused === false
+    const poppedDown = state.popUpSeconds > 0 && Date.now() > popUpUntil
+    setVisible(!hiddenWhilePaused && !poppedDown)
+
     labelText.textContent = state.paused ? 'Paused' : 'Now playing'
 
     setMarquee(titleEl, escapeHtml(state.title))
@@ -413,12 +661,15 @@
       if (art.getAttribute('src') !== state.artworkUrl) art.setAttribute('src', state.artworkUrl)
       art.hidden = false
       artFallback.hidden = true
+      backdrop.style.setProperty('--art-url', 'url("' + state.artworkUrl.replace(/"/g, '%22') + '")')
     } else {
       art.hidden = true
       art.removeAttribute('src')
       artFallback.hidden = false
       artFallback.textContent = initials(state.title)
+      backdrop.style.removeProperty('--art-url')
     }
+    applyColors(state.artworkUrl, state.artColors !== false)
 
     if (state.durationMs && state.positionMs != null) {
       progress.hidden = false
@@ -459,16 +710,24 @@
     } else {
       hintEl.hidden = true
     }
+
+    // Widths depend on the style, so re-measure the drifting text.
+    fit(titleEl)
+    fit(subEl)
   }
 
+  let lastState = null
   async function poll() {
     try {
       const response = await fetch('/state', { cache: 'no-store' })
       const text = await response.text()
-      // Skip the DOM work entirely when nothing changed.
-      if (text !== lastPayload) {
+      // Skip the DOM work when nothing changed, unless a pop-up is due to
+      // end (that depends on the clock, not the state).
+      const popUpDue = popUpUntil > 0 && Date.now() > popUpUntil && root.classList.contains('visible')
+      if (text !== lastPayload || popUpDue) {
         lastPayload = text
-        render(JSON.parse(text))
+        lastState = JSON.parse(text)
+        render(lastState)
       }
     } catch (_) {
       // App closed or restarting: keep the last frame and retry.

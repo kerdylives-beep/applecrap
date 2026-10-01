@@ -1,7 +1,7 @@
 import { getVersion } from '@tauri-apps/api/app'
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { AppStore } from '../useAppStore'
-import type { AppState } from '../types'
+import type { AppState, OverlayStyle } from '../types'
 import s from '../ui.module.css'
 import { playerConnectionState } from '../utils'
 import { activityEntries, cx, type ActivityMode } from '../format'
@@ -11,9 +11,17 @@ import { SaveState, TwitchAccounts } from './Setup'
 
 // ---- Overlay ----------------------------------------------------------------------
 
+const OVERLAY_STYLES: Array<{ key: OverlayStyle; name: string; hint: string }> = [
+  { key: 'card', name: 'Card', hint: 'Art, song and progress' },
+  { key: 'compact', name: 'Compact', hint: 'One slim line' },
+  { key: 'backdrop', name: 'Backdrop', hint: 'The cover blurred behind' },
+  { key: 'vinyl', name: 'Vinyl', hint: 'A spinning record' },
+]
+
 export function Overlay({ store, state }: { store: AppStore; state: AppState }) {
   const draft = store.settingsDraft.overlay
-  const url = `http://127.0.0.1:${state.settings.overlay.port}/`
+  const port = state.settings.overlay.port
+  const url = `http://127.0.0.1:${port}/`
   const [copied, setCopied] = useState(false)
   const copy = async () => {
     try {
@@ -32,10 +40,15 @@ export function Overlay({ store, state }: { store: AppStore; state: AppState }) 
           <span className={s.label}>OBS overlay</span>
           <SaveState store={store} />
         </div>
+        {state.settings.overlay.enabled ? (
+          // The real overlay, live. With nothing playing it shows a sample song.
+          <iframe key={port} className={s.previewFrame} title="Overlay preview" src={`${url}?preview&demo`} />
+        ) : (
+          <p className={s.hint}>The overlay is switched off below.</p>
+        )}
         <p className={s.hint}>
-          Add this address as a <strong>Browser</strong> source in OBS. It shows the song playing, who asked for it, and what's
-          next. The background is see-through, it hides itself when nothing is playing, and long titles scroll instead of
-          changing its size.
+          Add this address as a <strong>Browser</strong> source in OBS, sized <strong>560 × 320</strong> (that fits every
+          style with three songs up next). The background is see-through and it hides itself when nothing is playing.
         </p>
         <div className={s.urlBox}>
           <code>{url}</code>
@@ -43,38 +56,87 @@ export function Overlay({ store, state }: { store: AppStore; state: AppState }) 
             {copied ? 'Copied' : 'Copy'}
           </button>
           <button type="button" className={cx(s.btn, s.btnGhost)} onClick={() => void store.openOverlayPreview()}>
-            Preview
+            Open in browser
           </button>
         </div>
-        <p className={s.hint}>
-          Size in OBS: width 560. Height 300 with three songs up next and the request line, or 150 for just the song.
-        </p>
       </section>
+
       <section className={s.section}>
-        <span className={s.label}>Options</span>
+        <span className={s.label}>Style</span>
+        <div className={s.stylePicker} role="radiogroup" aria-label="Overlay style">
+          {OVERLAY_STYLES.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              role="radio"
+              aria-checked={draft.style === option.key}
+              className={cx(s.styleOption, draft.style === option.key && s.styleOptionActive)}
+              onClick={() => store.updateDraft('overlay', { style: option.key })}
+            >
+              <strong>{option.name}</strong>
+              <span>{option.hint}</span>
+            </button>
+          ))}
+        </div>
         <label className={s.check}>
-          <input type="checkbox" checked={draft.enabled} onChange={(event) => store.updateDraft('overlay', { enabled: event.target.checked })} />
-          Serve the overlay
+          <input type="checkbox" checked={draft.artColors} onChange={(event) => store.updateDraft('overlay', { artColors: event.target.checked })} />
+          Colors from the album art (otherwise AppleCrap's amber)
         </label>
+      </section>
+
+      <section className={s.section}>
+        <span className={s.label}>What it shows</span>
         <label className={s.check}>
           <input type="checkbox" checked={draft.showQueue} onChange={(event) => store.updateDraft('overlay', { showQueue: event.target.checked })} />
-          Show what's next up
+          What's next up
         </label>
         <label className={s.check}>
           <input type="checkbox" checked={draft.showHint} onChange={(event) => store.updateDraft('overlay', { showHint: event.target.checked })} />
-          Show viewers how to request (the chat command, and the Channel Points cost when that's on)
+          How to request (the chat command, and the Channel Points cost when that's on)
+        </label>
+        <label className={s.check}>
+          <input type="checkbox" checked={draft.showWhilePaused} onChange={(event) => store.updateDraft('overlay', { showWhilePaused: event.target.checked })} />
+          Stay on screen while paused
+        </label>
+        <label className={s.check}>
+          <input
+            type="checkbox"
+            checked={draft.popUpSeconds > 0}
+            onChange={(event) => store.updateDraft('overlay', { popUpSeconds: event.target.checked ? 10 : 0 })}
+          />
+          Pop up when a song starts, then hide
         </label>
         <div className={s.grid2}>
+          {draft.popUpSeconds > 0 ? (
+            <label className={s.field}>
+              Seconds on screen
+              <input className={s.input} type="number" min={3} max={60} value={draft.popUpSeconds} onChange={(event) => store.updateDraft('overlay', { popUpSeconds: Number(event.target.value) })} />
+            </label>
+          ) : null}
           <label className={s.field}>
             Songs in "next up"
             <input className={s.input} type="number" min={1} max={10} value={draft.queueCount} onChange={(event) => store.updateDraft('overlay', { queueCount: Number(event.target.value) })} />
           </label>
+        </div>
+      </section>
+
+      <section className={s.section}>
+        <span className={s.label}>Advanced</span>
+        <label className={s.check}>
+          <input type="checkbox" checked={draft.enabled} onChange={(event) => store.updateDraft('overlay', { enabled: event.target.checked })} />
+          Serve the overlay
+        </label>
+        <div className={s.grid2}>
           <label className={s.field}>
             Port
             <input className={s.input} type="number" min={1024} max={65535} value={draft.port} onChange={(event) => store.updateDraft('overlay', { port: Number(event.target.value) })} />
           </label>
         </div>
       </section>
+
+      <p className={s.hint}>
+        Style ideas, like colors from the album art, are inspired by nutty's Now Playing widget (nutty.gg).
+      </p>
     </div>
   )
 }
