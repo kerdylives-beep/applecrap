@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { MouseEvent } from 'react'
-import faviconUrl from '../../img/favicon.ico'
+import faviconUrl from '../../img/icon-small.svg'
 import type { AppStore } from '../useAppStore'
 import type { AppState, ViewKey } from '../types'
 import s from '../ui.module.css'
@@ -156,7 +156,7 @@ export function AlertStack({ store, state }: { store: AppStore; state: AppState 
             detail: 'Your settings and queue are kept.',
             actions: [
               {
-                label: store.busyAction === 'install-update' ? 'Installing…' : 'Install and restart',
+                label: store.busyAction === 'install-update' ? 'Installingâ€¦' : 'Install and restart',
                 primary: true,
                 busy: store.busyAction === 'install-update',
                 run: () => void store.installUpdate(),
