@@ -69,7 +69,6 @@ export type AppSettings = {
     showQueue: boolean
     queueCount: number
     showHint: boolean
-    style: OverlayStyle
     artColors: boolean
     showWhilePaused: boolean
     popUpSeconds: number
@@ -81,8 +80,6 @@ export type AppSettings = {
     pointsOnly: boolean
   }
 }
-
-export type OverlayStyle = 'card' | 'compact' | 'backdrop' | 'vinyl'
 
 export type ChannelPointsStatus = {
   phase: 'off' | 'starting' | 'live' | 'error'

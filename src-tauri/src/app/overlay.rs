@@ -173,7 +173,6 @@ impl AppContext {
             show_queue: settings.show_queue,
             queue,
             hint,
-            style: settings.style.clone(),
             art_colors: settings.art_colors,
             show_while_paused: settings.show_while_paused,
             pop_up_seconds: settings.pop_up_seconds,

@@ -58,7 +58,6 @@ const settings: AppSettings = {
     showQueue: true,
     queueCount: 3,
     showHint: true,
-    style: 'card',
     artColors: true,
     showWhilePaused: true,
     popUpSeconds: 0,

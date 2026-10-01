@@ -86,20 +86,23 @@ reaches viewers. The current bitrate is shown under the now-playing card.
 
 AppleCrap serves a now-playing overlay for OBS on your own machine.
 
-1. Open the **Overlay** panel in the app and copy the URL (`http://127.0.0.1:4747/` by default).
-2. In OBS, add a **Browser** source and paste it in, sized **560 x 320** (that fits every style with three songs up next).
+1. Open the **Overlay** page in the app and pick a style. A live preview shows the real thing.
+2. In OBS, add a **Browser** source with that style's address, at the size shown next to it.
 3. That is it — the background is transparent, so it sits straight over your scene.
 
-It shows the current song with its artwork, who requested it and how far through it is, what is
+| Style | Address | OBS size |
+| --- | --- | --- |
+| **Default** — art, song and a progress bar | `http://127.0.0.1:4747/` | 560 x 300 |
+| **Compact** — a slim pill that fills as the song plays | `http://127.0.0.1:4747/?style=compact` | 440 x 220 |
+| **Card** — a big cover on a blurred backdrop, for Starting Soon or BRB scenes | `http://127.0.0.1:4747/?style=card` | any size; it scales to fit |
+| **Vinyl** — a record that spins, with the progress around its edge | `http://127.0.0.1:4747/?style=vinyl` | 560 x 320 |
+
+Use as many as you like across your scenes; each source only draws its own style. Ticking
+"Shutdown source when not visible" in OBS keeps a style idle until its scene is live.
+
+Each shows the current song, who requested it (except Compact) and how far through it is, what is
 queued up next, and how viewers can request (the chat command, plus the Channel Points cost when
-that's on). It stays the same width no matter the song: long titles drift across instead.
-
-Pick a style on the Overlay page, where a live preview shows the real thing:
-
-- **Card** — artwork, song and progress.
-- **Compact** — one slim line.
-- **Backdrop** — the album cover blurred behind the text.
-- **Vinyl** — the cover as the label of a spinning record that stops when the song is paused.
+that's on). They keep a fixed size no matter the song: long titles drift across instead.
 
 By default its colors follow each song's album art. It can also pop up for a few seconds when a song
 starts instead of staying on screen, hide while paused, drop the "next up" list or the request line,

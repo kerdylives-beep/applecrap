@@ -1012,42 +1012,54 @@
   background: #2f3640;
 }
 
-.stylePicker {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.styleOption {
+.styleList {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.styleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 0 0;
   background: var(--surface);
+}
+
+.styleRow + .styleRow {
+  border-top: 1px solid var(--line);
+}
+
+.styleRowActive {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.styleRowMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 0;
+  background: none;
   text-align: left;
 }
 
-.styleOption strong {
-  font-size: 13px;
+.styleRowMain strong {
   font-weight: 500;
 }
 
-.styleOption span {
+.styleRowMain span {
   font-size: 12px;
   color: var(--muted);
 }
 
-.styleOption:hover {
-  background: var(--surface-2);
-}
-
-.styleOptionActive {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+.styleRowMeta code {
+  color: var(--text);
 }
 
 /* ---- First run -------------------------------------------------------- */

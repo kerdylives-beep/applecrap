@@ -1,7 +1,7 @@
 import { getVersion } from '@tauri-apps/api/app'
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { AppStore } from '../useAppStore'
-import type { AppState, OverlayStyle } from '../types'
+import type { AppState } from '../types'
 import s from '../ui.module.css'
 import { playerConnectionState } from '../utils'
 import { activityEntries, cx, type ActivityMode } from '../format'
@@ -11,27 +11,32 @@ import { SaveState, TwitchAccounts } from './Setup'
 
 // ---- Overlay ----------------------------------------------------------------------
 
-const OVERLAY_STYLES: Array<{ key: OverlayStyle; name: string; hint: string }> = [
-  { key: 'card', name: 'Card', hint: 'Art, song and progress' },
-  { key: 'compact', name: 'Compact', hint: 'One slim line' },
-  { key: 'backdrop', name: 'Backdrop', hint: 'The cover blurred behind' },
-  { key: 'vinyl', name: 'Vinyl', hint: 'A spinning record' },
+// Each style is its own address on the same port, so several OBS sources
+// can show different ones and each only draws its own.
+const OVERLAY_STYLES: Array<{ key: string; name: string; hint: string; size: string; frameHeight: number }> = [
+  { key: 'default', name: 'Default', hint: 'Art, song and a progress bar', size: '560 × 300', frameHeight: 300 },
+  { key: 'compact', name: 'Compact', hint: 'A slim pill that fills as the song plays', size: '440 × 220', frameHeight: 220 },
+  { key: 'card', name: 'Card', hint: 'Big cover on a blurred backdrop, for Starting Soon or BRB scenes', size: 'Any size — it scales to fit', frameHeight: 420 },
+  { key: 'vinyl', name: 'Vinyl', hint: 'A spinning record with the progress around its edge', size: '560 × 320', frameHeight: 320 },
 ]
 
 export function Overlay({ store, state }: { store: AppStore; state: AppState }) {
   const draft = store.settingsDraft.overlay
   const port = state.settings.overlay.port
-  const url = `http://127.0.0.1:${port}/`
-  const [copied, setCopied] = useState(false)
-  const copy = async () => {
+  const base = `http://127.0.0.1:${port}/`
+  const [previewing, setPreviewing] = useState('default')
+  const [copied, setCopied] = useState<string | null>(null)
+  const addressFor = (key: string) => (key === 'default' ? base : `${base}?style=${key}`)
+  const copy = async (key: string) => {
     try {
-      await navigator.clipboard.writeText(url)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1500)
+      await navigator.clipboard.writeText(addressFor(key))
+      setCopied(key)
+      window.setTimeout(() => setCopied(null), 1500)
     } catch {
       store.setNotice("Couldn't reach the clipboard. Select the address and copy it by hand.")
     }
   }
+  const shown = OVERLAY_STYLES.find((option) => option.key === previewing) ?? OVERLAY_STYLES[0]
 
   return (
     <div className={s.page}>
@@ -42,40 +47,35 @@ export function Overlay({ store, state }: { store: AppStore; state: AppState }) 
         </div>
         {state.settings.overlay.enabled ? (
           // The real overlay, live. With nothing playing it shows a sample song.
-          <iframe key={port} className={s.previewFrame} title="Overlay preview" src={`${url}?preview&demo`} />
+          <iframe
+            key={`${port}-${shown.key}`}
+            className={s.previewFrame}
+            style={{ height: shown.frameHeight }}
+            title={`${shown.name} overlay preview`}
+            src={`${addressFor(shown.key)}${shown.key === 'default' ? '?' : '&'}preview&demo&embedded`}
+          />
         ) : (
-          <p className={s.hint}>The overlay is switched off below.</p>
+          <p className={s.hint}>The overlay is switched off under Advanced.</p>
         )}
         <p className={s.hint}>
-          Add this address as a <strong>Browser</strong> source in OBS, sized <strong>560 × 320</strong> (that fits every
-          style with three songs up next). The background is see-through and it hides itself when nothing is playing.
+          Add a style's address as a <strong>Browser</strong> source in OBS, at the size shown. Use as many as you like, in
+          different scenes. The background is see-through and each hides itself when nothing is playing. Tip: tick
+          "Shutdown source when not visible" in OBS so a style only runs while its scene is live.
         </p>
-        <div className={s.urlBox}>
-          <code>{url}</code>
-          <button type="button" className={s.btn} onClick={() => void copy()}>
-            {copied ? 'Copied' : 'Copy'}
-          </button>
-          <button type="button" className={cx(s.btn, s.btnGhost)} onClick={() => void store.openOverlayPreview()}>
-            Open in browser
-          </button>
-        </div>
-      </section>
-
-      <section className={s.section}>
-        <span className={s.label}>Style</span>
-        <div className={s.stylePicker} role="radiogroup" aria-label="Overlay style">
+        <div className={s.styleList}>
           {OVERLAY_STYLES.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              role="radio"
-              aria-checked={draft.style === option.key}
-              className={cx(s.styleOption, draft.style === option.key && s.styleOptionActive)}
-              onClick={() => store.updateDraft('overlay', { style: option.key })}
-            >
-              <strong>{option.name}</strong>
-              <span>{option.hint}</span>
-            </button>
+            <div key={option.key} className={cx(s.styleRow, previewing === option.key && s.styleRowActive)}>
+              <button type="button" className={s.styleRowMain} aria-pressed={previewing === option.key} onClick={() => setPreviewing(option.key)}>
+                <strong>{option.name}</strong>
+                <span>{option.hint}</span>
+                <span className={s.styleRowMeta}>
+                  <code>{addressFor(option.key)}</code> · {option.size}
+                </span>
+              </button>
+              <button type="button" className={cx(s.btn, s.btnSmall)} onClick={() => void copy(option.key)}>
+                {copied === option.key ? 'Copied' : 'Copy'}
+              </button>
+            </div>
           ))}
         </div>
         <label className={s.check}>
@@ -121,7 +121,12 @@ export function Overlay({ store, state }: { store: AppStore; state: AppState }) 
       </section>
 
       <section className={s.section}>
-        <span className={s.label}>Advanced</span>
+        <div className={s.sectionHead}>
+          <span className={s.label}>Advanced</span>
+          <button type="button" className={cx(s.btn, s.btnSmall, s.btnGhost)} onClick={() => void store.openOverlayPreview()}>
+            Open in browser
+          </button>
+        </div>
         <label className={s.check}>
           <input type="checkbox" checked={draft.enabled} onChange={(event) => store.updateDraft('overlay', { enabled: event.target.checked })} />
           Serve the overlay

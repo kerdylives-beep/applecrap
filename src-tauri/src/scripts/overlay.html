@@ -12,7 +12,8 @@
   /* Same palette as the app: warm near-black, amber for music, violet for
      Twitch. With "colors from the album art" on, --accent and --tint follow
      each song's artwork. The page itself is transparent; OBS lays it over
-     the scene. */
+     the scene. Each style is its own address (?style=...), so every OBS
+     source draws only the style it shows. */
   :root {
     --card: rgba(18, 17, 20, 0.9);
     --chip: rgba(18, 17, 20, 0.84);
@@ -64,7 +65,10 @@
     color: rgba(255, 255, 255, 0.6);
   }
 
-  body.preview .preview-note { display: block; }
+  body.preview:not(.embedded) .preview-note { display: block; }
+
+  /* Scaled to fit the source for the Card style (see fitStage). */
+  #stage { transform-origin: top left; }
 
   #root {
     width: calc(var(--width) + 40px);
@@ -83,7 +87,10 @@
     transform: translateY(0);
   }
 
-  /* ---- Card (the standard style) ---------------------------------------- */
+  /* Parts only some styles use. */
+  .backdrop, .hole, .knob, .disc, .pill-fill, .pill-line { display: none; }
+
+  /* ---- Default ------------------------------------------------------------ */
 
   .card {
     position: relative;
@@ -122,8 +129,6 @@
     font: 700 26px 'Saira Semi Condensed', sans-serif;
     color: var(--accent);
   }
-
-  .hole, .backdrop { display: none; }
 
   .meta {
     position: relative;
@@ -206,8 +211,13 @@
   }
 
   .progress {
+    position: relative;
     height: 3px;
     margin-top: 7px;
+  }
+
+  .progress-track {
+    height: 100%;
     border-radius: 2px;
     background: rgba(255, 255, 255, 0.1);
     overflow: hidden;
@@ -221,56 +231,177 @@
     transition: width 1s linear, background-color 600ms ease;
   }
 
-  /* ---- Compact: one slim line -------------------------------------------- */
+  /* ---- Compact: the pill is the progress bar ----------------------------- */
 
   #root[data-style='compact'] { --width: 400px; }
 
   [data-style='compact'] .card {
-    grid-template-columns: 44px minmax(0, 1fr);
-    gap: 11px;
-    padding: 7px 14px 7px 7px;
-    border-radius: 12px;
+    display: block;
+    height: 40px;
+    padding: 0;
+    border-radius: 999px;
+    background: var(--card);
   }
 
-  [data-style='compact'] .art-wrap { width: 44px; height: 44px; }
-  [data-style='compact'] .art { border-radius: 7px; }
-  [data-style='compact'] .art-fallback { font-size: 17px; }
-  [data-style='compact'] .label { display: none; }
-  [data-style='compact'] .title { font-size: 18px; }
-  [data-style='compact'] .sub { font-size: 12px; }
-  [data-style='compact'] .progress { margin-top: 4px; height: 2px; }
+  [data-style='compact'] .art-wrap,
+  [data-style='compact'] .meta { display: none; }
 
-  /* ---- Backdrop: the album art, blurred, behind everything ---------------- */
-
-  [data-style='backdrop'] .card {
-    grid-template-columns: 96px minmax(0, 1fr);
-    gap: 16px;
-    padding: 16px;
-    background: rgba(10, 10, 12, 0.6);
-  }
-
-  [data-style='backdrop'] .backdrop {
+  [data-style='compact'] .pill-fill {
     display: block;
     position: absolute;
-    inset: -40px;
-    background: var(--tint) center / cover no-repeat;
-    background-image: var(--art-url, none);
-    filter: blur(26px) saturate(1.25) brightness(0.5);
-    transition: background-image 600ms ease;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    /* The played part, in the song's color; its right edge is the playhead. */
+    background: color-mix(in srgb, var(--accent) 42%, rgba(18, 17, 20, 0.9));
+    border-right: 2px solid var(--accent);
+    transition: width 1s linear, background-color 600ms ease;
   }
 
-  [data-style='backdrop'] .art-wrap { width: 96px; height: 96px; }
-  [data-style='backdrop'] .art { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
-  [data-style='backdrop'] .title { font-size: 26px; }
-  [data-style='backdrop'] .progress { background: rgba(255, 255, 255, 0.16); }
+  [data-style='compact'] .pill-line {
+    display: flex;
+    align-items: center;
+    position: relative;
+    height: 100%;
+    padding: 0 20px;
+  }
 
-  /* ---- Vinyl: the art as the label of a spinning record ------------------- */
+  .pill-line .marquee { width: 100%; }
 
-  [data-style='vinyl'] .card { grid-template-columns: 92px minmax(0, 1fr); }
+  .pill-title {
+    font: 700 17px 'Saira Semi Condensed', sans-serif;
+  }
 
-  [data-style='vinyl'] .art-wrap {
-    width: 92px;
-    height: 92px;
+  .pill-artist {
+    margin-left: 8px;
+    font: 600 12px 'Saira Semi Condensed', sans-serif;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ---- Card: tall, for Starting Soon / BRB scenes; scales to the source --- */
+
+  #root[data-style='card'] { --width: 360px; }
+
+  [data-style='card'] .card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 20px;
+    border-radius: 22px;
+    background: rgba(10, 10, 12, 0.55);
+  }
+
+  [data-style='card'] .backdrop {
+    display: block;
+    position: absolute;
+    inset: -60px;
+    background: var(--tint) center / cover no-repeat;
+    background-image: var(--art-url, none);
+    filter: blur(34px) saturate(1.3) brightness(0.5);
+  }
+
+  [data-style='card'] .art-wrap { width: 100%; height: auto; aspect-ratio: 1; }
+  [data-style='card'] .art { border-radius: 14px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); }
+  [data-style='card'] .art-fallback { font-size: 84px; }
+  [data-style='card'] .meta { gap: 3px; }
+  [data-style='card'] .title { font-size: 28px; }
+  [data-style='card'] .sub { font-size: 14px; }
+  [data-style='card'] .progress { margin-top: 14px; }
+  [data-style='card'] .progress-track { background: rgba(255, 255, 255, 0.18); }
+
+  [data-style='card'] .knob {
+    display: block;
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 12px;
+    height: 12px;
+    margin: -6px 0 0 -6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+    transition: left 1s linear, background-color 600ms ease;
+  }
+
+  /* ---- Vinyl: a spinning record with the progress around its edge -------- */
+
+  [data-style='vinyl'] .card {
+    display: block;
+    height: 132px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    overflow: visible;
+  }
+
+  [data-style='vinyl'] .art-wrap,
+  [data-style='vinyl'] .progress { display: none; }
+
+  [data-style='vinyl'] .meta {
+    position: absolute;
+    left: 66px;
+    right: 0;
+    top: 22px;
+    bottom: 22px;
+    justify-content: center;
+    padding: 0 16px 0 84px;
+    border-radius: 14px;
+    background: var(--tint);
+    border: 1px solid var(--line);
+  }
+
+  [data-style='vinyl'] .disc {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 132px;
+    height: 132px;
+    z-index: 1;
+  }
+
+  .ring {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    /* Start at the top and run clockwise, the way the record turns. */
+    transform: rotate(-90deg);
+  }
+
+  .ring-track { stroke: rgba(255, 255, 255, 0.14); }
+
+  .ring-fill {
+    stroke: var(--accent);
+    transition: stroke-dasharray 1s linear, stroke 600ms ease;
+  }
+
+  .ring-arm {
+    position: absolute;
+    inset: 0;
+    transition: transform 1s linear;
+  }
+
+  .ring-arm .knob {
+    display: block;
+    position: absolute;
+    left: 60px;
+    top: -1px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+  }
+
+  .record {
+    position: absolute;
+    inset: 13px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -278,23 +409,22 @@
     background:
       radial-gradient(circle, transparent 0 44%, rgba(255, 255, 255, 0.06) 45%, transparent 47%),
       repeating-radial-gradient(circle, #121214 0 2px, #1d1d21 2px 3px);
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 6px 18px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
     animation: spin 5s linear infinite;
   }
 
-  [data-style='vinyl'].is-paused .art-wrap,
-  [data-style='vinyl'] .art-wrap.stopped { animation-play-state: paused; }
+  .is-paused .record { animation-play-state: paused; }
 
-  [data-style='vinyl'] .art {
+  .record .art {
     position: absolute;
-    width: 42px;
-    height: 42px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
   }
 
-  [data-style='vinyl'] .art-fallback { font-size: 15px; }
+  .record .art-fallback { font-size: 16px; }
 
-  [data-style='vinyl'] .hole {
+  .record .hole {
     display: block;
     position: absolute;
     width: 6px;
@@ -383,31 +513,49 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .marquee.scrolling > span, .pulse, .bump, [data-style='vinyl'] .art-wrap { animation: none; }
+    .marquee.scrolling > span, .pulse, .bump, .record { animation: none; }
   }
 </style>
 </head>
 <body>
-  <div id="root" data-style="card">
-    <div class="card" id="card">
-      <div class="backdrop" id="backdrop"></div>
-      <div class="art-wrap" id="art-wrap">
-        <div class="art art-fallback" id="art-fallback"></div>
-        <img class="art" id="art" alt="" hidden />
-        <div class="hole"></div>
+  <div id="stage">
+    <div id="root" data-style="default">
+      <div class="card" id="card">
+        <div class="backdrop" id="backdrop"></div>
+        <div class="pill-fill" id="pill-fill"></div>
+        <div class="pill-line"><div class="marquee" id="pill"><span></span></div></div>
+        <div class="art-wrap">
+          <div class="art art-fallback"></div>
+          <img class="art" alt="" hidden />
+        </div>
+        <div class="disc">
+          <svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
+            <circle class="ring-track" cx="50" cy="50" r="46" fill="none" stroke-width="1.5" />
+            <circle class="ring-fill" id="ring-fill" cx="50" cy="50" r="46" fill="none" stroke-width="4" stroke-linecap="round" stroke-dasharray="0 289.03" />
+          </svg>
+          <div class="record">
+            <div class="art art-fallback"></div>
+            <img class="art" alt="" hidden />
+            <div class="hole"></div>
+          </div>
+          <div class="ring-arm" id="ring-arm"><span class="knob"></span></div>
+        </div>
+        <div class="meta">
+          <div class="label"><span class="pulse"></span><span id="label-text">Now playing</span></div>
+          <div class="marquee title" id="title"><span></span></div>
+          <div class="marquee sub" id="sub"><span></span></div>
+          <div class="progress" id="progress" hidden>
+            <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+            <span class="knob" id="bar-knob"></span>
+          </div>
+        </div>
       </div>
-      <div class="meta">
-        <div class="label"><span class="pulse"></span><span id="label-text">Now playing</span></div>
-        <div class="marquee title" id="title"><span></span></div>
-        <div class="marquee sub" id="sub"><span></span></div>
-        <div class="progress" id="progress" hidden><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="next" id="next" hidden>
+        <div class="next-label">Next up</div>
+        <div id="next-items"></div>
       </div>
+      <div class="hint" id="hint" hidden></div>
     </div>
-    <div class="next" id="next" hidden>
-      <div class="next-label">Next up</div>
-      <div id="next-items"></div>
-    </div>
-    <div class="hint" id="hint" hidden></div>
   </div>
   <div class="preview-note">Preview — in OBS this sits on top of your scene.</div>
 
@@ -416,24 +564,34 @@
   'use strict'
 
   const $ = (id) => document.getElementById(id)
+  const stage = $('stage')
   const root = $('root')
   const card = $('card')
-  const art = $('art')
-  const artFallback = $('art-fallback')
   const backdrop = $('backdrop')
   const labelText = $('label-text')
   const titleEl = $('title')
   const subEl = $('sub')
+  const pillEl = $('pill')
+  const pillFill = $('pill-fill')
   const progress = $('progress')
   const progressFill = $('progress-fill')
+  const barKnob = $('bar-knob')
+  const ringFill = $('ring-fill')
+  const ringArm = $('ring-arm')
   const nextEl = $('next')
   const nextItems = $('next-items')
   const hintEl = $('hint')
+  const arts = Array.from(document.querySelectorAll('img.art'))
+  const fallbacks = Array.from(document.querySelectorAll('.art-fallback'))
+  const RING_LENGTH = 2 * Math.PI * 46
 
   const params = new URLSearchParams(location.search)
-  if (params.has('preview')) {
-    document.body.classList.add('preview')
-  }
+  const STYLES = ['default', 'compact', 'card', 'vinyl']
+  const style = STYLES.includes(params.get('style')) ? params.get('style') : 'default'
+  root.dataset.style = style
+  if (params.has('preview')) document.body.classList.add('preview')
+  // Inside the app's Overlay page: no "this is a preview" caption.
+  if (params.has('embedded')) document.body.classList.add('embedded')
   // ?demo shows a sample song while nothing is playing, so a style can be
   // judged from the app's Overlay page at any time.
   const demo = params.has('demo')
@@ -445,17 +603,13 @@
 
   // Fading out the instant a state blip arrives would flicker on stream, so
   // hiding waits a beat while showing is immediate.
-  function setVisible(visible, immediately) {
+  function setVisible(visible) {
     if (visible) {
       if (hideTimer !== null) {
         clearTimeout(hideTimer)
         hideTimer = null
       }
       root.classList.add('visible')
-      return
-    }
-    if (immediately) {
-      root.classList.remove('visible')
       return
     }
     if (hideTimer === null && root.classList.contains('visible')) {
@@ -499,6 +653,16 @@
     fit(el)
   }
 
+  // The Card style is meant to be sized freely in OBS (it suits Starting
+  // Soon and BRB scenes): scale it to fill the source instead of cropping.
+  function fitStage() {
+    if (style !== 'card') return
+    stage.style.transform = 'none'
+    const scale = Math.min(window.innerWidth / root.offsetWidth, window.innerHeight / root.offsetHeight)
+    stage.style.transform = Number.isFinite(scale) && scale > 0 ? 'scale(' + scale + ')' : ''
+  }
+  window.addEventListener('resize', fitStage)
+
   // ---- Colors from the album art ----------------------------------------
 
   // Picks the artwork's most vivid hue (weighted by how much of the cover it
@@ -513,7 +677,7 @@
     context.drawImage(image, 0, 0, size, size)
     const pixels = context.getImageData(0, 0, size, size).data
 
-    const bins = new Array(36).fill(null).map(() => ({ weight: 0, saturation: 0 }))
+    const bins = new Array(36).fill(null).map(() => ({ weight: 0, saturation: 0, hueSum: 0 }))
     let colorful = 0
     for (let index = 0; index < pixels.length; index += 4) {
       const r = pixels[index] / 255
@@ -534,7 +698,7 @@
       const bin = bins[Math.floor(hue / 10)]
       bin.weight += weight
       bin.saturation += saturation * weight
-      bin.hueSum = (bin.hueSum || 0) + hue * weight
+      bin.hueSum += hue * weight
       colorful += 1
     }
 
@@ -619,11 +783,26 @@
     })
   }
 
+  // Moves every progress display to `percent`; without animating when the
+  // song just changed (so it jumps back to the start instead of sliding).
+  function setProgress(percent, jump) {
+    const parts = [progressFill, barKnob, pillFill, ringFill, ringArm]
+    if (jump) parts.forEach((part) => (part.style.transition = 'none'))
+    progressFill.style.width = percent + '%'
+    pillFill.style.width = percent + '%'
+    barKnob.style.left = percent + '%'
+    ringFill.setAttribute('stroke-dasharray', (RING_LENGTH * percent) / 100 + ' ' + RING_LENGTH)
+    ringArm.style.transform = 'rotate(' + percent * 3.6 + 'deg)'
+    if (jump) {
+      void card.offsetWidth
+      parts.forEach((part) => (part.style.transition = ''))
+    }
+  }
+
   function render(state) {
     if (demo && !(state.playing && state.title)) {
       state = demoState(state)
     }
-    root.dataset.style = state.style || 'card'
     const playing = !!state.playing && !!state.title
     root.classList.toggle('is-paused', !!state.paused)
     if (!playing) {
@@ -656,35 +835,40 @@
         (state.requestedWithPoints ? '<span class="points">points</span>' : '')
     }
     setMarquee(subEl, sub)
+    // Compact: the title as Apple writes it, in bold, then the artist in
+    // capitals. No requester; there's no room.
+    setMarquee(
+      pillEl,
+      '<span class="pill-title">' + escapeHtml(state.title) + '</span>' +
+        (state.artist ? '<span class="pill-artist">' + escapeHtml(state.artist) + '</span>' : ''),
+    )
 
+    for (const art of arts) {
+      if (state.artworkUrl) {
+        if (art.getAttribute('src') !== state.artworkUrl) art.setAttribute('src', state.artworkUrl)
+        art.hidden = false
+      } else {
+        art.hidden = true
+        art.removeAttribute('src')
+      }
+    }
+    for (const fallback of fallbacks) {
+      fallback.hidden = !!state.artworkUrl
+      fallback.textContent = initials(state.title)
+    }
     if (state.artworkUrl) {
-      if (art.getAttribute('src') !== state.artworkUrl) art.setAttribute('src', state.artworkUrl)
-      art.hidden = false
-      artFallback.hidden = true
       backdrop.style.setProperty('--art-url', 'url("' + state.artworkUrl.replace(/"/g, '%22') + '")')
     } else {
-      art.hidden = true
-      art.removeAttribute('src')
-      artFallback.hidden = false
-      artFallback.textContent = initials(state.title)
       backdrop.style.removeProperty('--art-url')
     }
     applyColors(state.artworkUrl, state.artColors !== false)
 
     if (state.durationMs && state.positionMs != null) {
       progress.hidden = false
-      const percent = Math.min(100, (state.positionMs / state.durationMs) * 100)
-      if (newTrack) {
-        // Jump to the new track's position instead of sliding back.
-        progressFill.style.transition = 'none'
-        progressFill.style.width = percent + '%'
-        void progressFill.offsetWidth
-        progressFill.style.transition = ''
-      } else {
-        progressFill.style.width = percent + '%'
-      }
+      setProgress(Math.min(100, (state.positionMs / state.durationMs) * 100), newTrack)
     } else {
       progress.hidden = true
+      setProgress(0, true)
     }
 
     const queue = Array.isArray(state.queue) ? state.queue : []
@@ -711,12 +895,9 @@
       hintEl.hidden = true
     }
 
-    // Widths depend on the style, so re-measure the drifting text.
-    fit(titleEl)
-    fit(subEl)
+    fitStage()
   }
 
-  let lastState = null
   async function poll() {
     try {
       const response = await fetch('/state', { cache: 'no-store' })
@@ -726,8 +907,7 @@
       const popUpDue = popUpUntil > 0 && Date.now() > popUpUntil && root.classList.contains('visible')
       if (text !== lastPayload || popUpDue) {
         lastPayload = text
-        lastState = JSON.parse(text)
-        render(lastState)
+        render(JSON.parse(text))
       }
     } catch (_) {
       // App closed or restarting: keep the last frame and retry.
@@ -739,6 +919,8 @@
     document.fonts.ready.then(function () {
       fit(titleEl)
       fit(subEl)
+      fit(pillEl)
+      fitStage()
     })
   }
 

@@ -289,7 +289,6 @@ pub struct OverlayState {
     pub queue: Vec<OverlayQueueItem>,
     /// "Request a song: !sr + name, or 500 points", when turned on.
     pub hint: Option<String>,
-    pub style: String,
     pub art_colors: bool,
     pub show_while_paused: bool,
     pub pop_up_seconds: u8,
@@ -314,8 +313,6 @@ pub struct OverlaySettings {
     /// Tell viewers how to request (the chat command, and the reward's cost
     /// while Channel Points requests are live).
     pub show_hint: bool,
-    /// One of `OVERLAY_STYLES`.
-    pub style: String,
     /// Tint the overlay with colors taken from the album art.
     pub art_colors: bool,
     pub show_while_paused: bool,
@@ -324,9 +321,6 @@ pub struct OverlaySettings {
     pub pop_up_seconds: u8,
 }
 
-/// Card (the standard look), Compact (one slim line), Backdrop (the album
-/// art blurred behind the text) and Vinyl (the art on a spinning record).
-pub const OVERLAY_STYLES: &[&str] = &["card", "compact", "backdrop", "vinyl"];
 
 impl Default for OverlaySettings {
     fn default() -> Self {
@@ -336,7 +330,6 @@ impl Default for OverlaySettings {
             show_queue: true,
             queue_count: 3,
             show_hint: true,
-            style: "card".to_string(),
             art_colors: true,
             show_while_paused: true,
             pop_up_seconds: 0,
@@ -744,7 +737,6 @@ pub struct OverlaySettingsPatch {
     pub show_queue: Option<bool>,
     pub queue_count: Option<u8>,
     pub show_hint: Option<bool>,
-    pub style: Option<String>,
     pub art_colors: Option<bool>,
     pub show_while_paused: Option<bool>,
     pub pop_up_seconds: Option<u8>,
@@ -878,9 +870,6 @@ impl AppSettings {
             if let Some(show_hint) = overlay.show_hint {
                 self.overlay.show_hint = show_hint;
             }
-            if let Some(style) = overlay.style {
-                self.overlay.style = style;
-            }
             if let Some(art_colors) = overlay.art_colors {
                 self.overlay.art_colors = art_colors;
             }
@@ -918,9 +907,6 @@ impl AppSettings {
             title.chars().take(MAX_REWARD_TITLE_CHARS).collect()
         };
         self.channel_points.cost = self.channel_points.cost.clamp(1, 10_000_000);
-        if !OVERLAY_STYLES.contains(&self.overlay.style.as_str()) {
-            self.overlay.style = "card".to_string();
-        }
         self.overlay.pop_up_seconds = self.overlay.pop_up_seconds.min(60);
 
         self.twitch.channel = self
