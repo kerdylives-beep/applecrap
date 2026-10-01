@@ -374,7 +374,7 @@
     transform: rotate(-90deg);
   }
 
-  .ring-track { stroke: rgba(255, 255, 255, 0.14); }
+  .ring-track { stroke: rgba(255, 255, 255, 0.1); }
 
   .ring-fill {
     stroke: var(--accent);
@@ -401,7 +401,8 @@
 
   .record {
     position: absolute;
-    inset: 13px;
+    /* Out to the inside edge of the progress ring (r 46 - 2 of 50). */
+    inset: 6%;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -417,8 +418,8 @@
 
   .record .art {
     position: absolute;
-    width: 48px;
-    height: 48px;
+    width: 45%;
+    height: 45%;
     border-radius: 50%;
   }
 
@@ -530,7 +531,7 @@
         </div>
         <div class="disc">
           <svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
-            <circle class="ring-track" cx="50" cy="50" r="46" fill="none" stroke-width="1.5" />
+            <circle class="ring-track" cx="50" cy="50" r="46" fill="none" stroke-width="4" />
             <circle class="ring-fill" id="ring-fill" cx="50" cy="50" r="46" fill="none" stroke-width="4" stroke-linecap="round" stroke-dasharray="0 289.03" />
           </svg>
           <div class="record">
