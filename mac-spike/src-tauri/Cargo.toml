@@ -1,0 +1,16 @@
+[package]
+name = "crabapple-mac-spike"
+version = "0.0.1"
+description = "Throwaway Mac feasibility spike: does Apple Music's protected playback work in a Tauri WKWebView?"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "=2.11.1", features = [] }
+serde_json = "1"
+
+[profile.release]
+strip = true

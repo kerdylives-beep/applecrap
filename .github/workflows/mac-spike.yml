@@ -1,0 +1,56 @@
+# Builds the throwaway Mac spike (mac-spike/) on GitHub's hosted macOS runner
+# as an ad-hoc-signed universal .app, uploaded as a workflow artifact.
+# Never publishes a release. Lives only on the mac-spike branch.
+name: Mac spike
+
+on:
+  push:
+    branches: [mac-spike]
+    paths: ["mac-spike/**", ".github/workflows/mac-spike.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: mac-spike
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mac-spike/src-tauri
+
+      - name: Generate icons
+        run: npx --yes @tauri-apps/cli@2.9.2 icon app-icon.png -o src-tauri/icons
+
+      - name: Build universal .app (ad-hoc signed)
+        run: npx --yes @tauri-apps/cli@2.9.2 build --target universal-apple-darwin --bundles app
+
+      - name: Check the bundle
+        run: |
+          APP="src-tauri/target/universal-apple-darwin/release/bundle/macos/Crabapple Mac Spike.app"
+          ls -la "$APP/Contents/MacOS"
+          lipo -info "$APP/Contents/MacOS/"*
+          codesign -dv --verbose=2 "$APP" 2>&1 | head -20
+          codesign --verify --deep --strict "$APP" && echo "signature verifies"
+          # Expected to be rejected: there is no Developer ID or notarization.
+          spctl -a -vv "$APP" 2>&1 || true
+          mkdir -p ../out
+          ditto -c -k --keepParent "$APP" "../out/Crabapple-Mac-Spike.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Crabapple-Mac-Spike
+          path: out/Crabapple-Mac-Spike.zip
+          retention-days: 14

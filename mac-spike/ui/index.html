@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Crabapple Mac Spike</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 20px; background: #141821; color: #f2efea; font: 14px/1.5 -apple-system, system-ui, sans-serif; display: grid; gap: 14px; }
+  h1 { margin: 0; font-size: 20px; }
+  p { margin: 0; color: #c9c3cc; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  button { font: 600 14px -apple-system, system-ui; padding: 10px 14px; border-radius: 10px; border: 0; cursor: pointer; background: #2a303b; color: #f2efea; }
+  button.go { background: #ee2340; color: #fff; }
+  pre { margin: 0; padding: 10px; border-radius: 10px; background: #0c0e13; font: 11.5px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-word; -webkit-user-select: text; user-select: text; }
+</style>
+</head>
+<body>
+  <h1>🦀 Crabapple Mac spike</h1>
+  <p>This test checks whether Apple Music can play full songs inside an app like Crabapple on a Mac. Open Apple Music, sign in, then press <b>Play test song</b> in the red-bordered panel.</p>
+  <div class="row">
+    <button class="go" id="default">1. Open Apple Music</button>
+    <button id="safari">2. Open with Safari user agent</button>
+  </div>
+  <p>Do button 1 first. If the test song doesn't play there, close that window and try button 2.</p>
+  <pre id="out">Checking this window's DRM support…</pre>
+<script>
+  const invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+  const out = document.getElementById("out");
+  const lines = [];
+  const add = (l) => { lines.push(l); out.textContent = lines.join("\n"); };
+  document.getElementById("default").onclick = () => invoke("open_player", { safariUa: false }).catch((e) => add("open failed: " + e));
+  document.getElementById("safari").onclick = () => invoke("open_player", { safariUa: true }).catch((e) => add("open failed: " + e));
+
+  (async () => {
+    add("Launcher window (app's own page), for comparison:");
+    add("userAgent: " + navigator.userAgent);
+    add("requestMediaKeySystemAccess: " + typeof navigator.requestMediaKeySystemAccess + "   WebKitMediaKeys: " + typeof window.WebKitMediaKeys);
+    if (navigator.requestMediaKeySystemAccess) {
+      for (const ks of ["com.apple.fps", "com.apple.fps.1_0", "com.apple.fps.3_0"]) {
+        try {
+          await navigator.requestMediaKeySystemAccess(ks, [{ initDataTypes: ["sinf", "skd"], audioCapabilities: [{ contentType: 'audio/mp4; codecs="mp4a.40.2"' }] }]);
+          add("EME " + ks + ": SUPPORTED");
+        } catch (e) { add("EME " + ks + ": no (" + e.name + ": " + e.message + ")"); }
+      }
+    }
+  })();
+</script>
+</body>
+</html>

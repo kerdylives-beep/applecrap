@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The launcher window may call the spike's own commands.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
