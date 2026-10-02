@@ -41,6 +41,9 @@
   html, body {
     margin: 0;
     padding: 0;
+    /* The full source size, so a Card scaled up past its own layout size
+       isn't clipped to it. */
+    height: 100%;
     background: transparent;
     overflow: hidden;
     font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
@@ -659,8 +662,17 @@
   function fitStage() {
     if (style !== 'card') return
     stage.style.transform = 'none'
-    const scale = Math.min(window.innerWidth / root.offsetWidth, window.innerHeight / root.offsetHeight)
-    stage.style.transform = Number.isFinite(scale) && scale > 0 ? 'scale(' + scale + ')' : ''
+    const width = root.offsetWidth
+    const height = root.offsetHeight
+    const scale = Math.min(window.innerWidth / width, window.innerHeight / height)
+    if (!Number.isFinite(scale) || scale <= 0) {
+      stage.style.transform = ''
+      return
+    }
+    // Centered in whatever box the source is given.
+    const x = (window.innerWidth - width * scale) / 2
+    const y = (window.innerHeight - height * scale) / 2
+    stage.style.transform = 'translate(' + x + 'px, ' + y + 'px) scale(' + scale + ')'
   }
   window.addEventListener('resize', fitStage)
 
