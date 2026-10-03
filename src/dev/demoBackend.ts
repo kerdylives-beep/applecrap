@@ -44,10 +44,8 @@ const settings: AppSettings = {
   requestLimits: {
     maxQueueSize: 25,
     maxPerUser: 2,
-    cooldownSeconds: 120,
     allowDuplicates: false,
     allowLinks: true,
-    modsBypassLimits: true,
     maxTrackMinutes: 10,
   },
   appleMusic: { storefront: 'us' },

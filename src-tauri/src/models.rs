@@ -132,10 +132,8 @@ impl Default for TwitchSettings {
 pub struct RequestLimits {
     pub max_queue_size: u32,
     pub max_per_user: u32,
-    pub cooldown_seconds: u32,
     pub allow_duplicates: bool,
     pub allow_links: bool,
-    pub mods_bypass_limits: bool,
     pub max_track_minutes: u32,
 }
 
@@ -144,10 +142,8 @@ impl Default for RequestLimits {
         Self {
             max_queue_size: 25,
             max_per_user: 2,
-            cooldown_seconds: 120,
             allow_duplicates: false,
             allow_links: true,
-            mods_bypass_limits: true,
             max_track_minutes: 10,
         }
     }
@@ -688,10 +684,8 @@ pub struct TwitchSettingsPatch {
 pub struct RequestLimitsPatch {
     pub max_queue_size: Option<u32>,
     pub max_per_user: Option<u32>,
-    pub cooldown_seconds: Option<u32>,
     pub allow_duplicates: Option<bool>,
     pub allow_links: Option<bool>,
-    pub mods_bypass_limits: Option<bool>,
     pub max_track_minutes: Option<u32>,
 }
 
@@ -815,17 +809,11 @@ impl AppSettings {
             if let Some(value) = request_limits.max_per_user {
                 self.request_limits.max_per_user = value.clamp(1, 20);
             }
-            if let Some(value) = request_limits.cooldown_seconds {
-                self.request_limits.cooldown_seconds = value.clamp(0, 3600);
-            }
             if let Some(value) = request_limits.allow_duplicates {
                 self.request_limits.allow_duplicates = value;
             }
             if let Some(value) = request_limits.allow_links {
                 self.request_limits.allow_links = value;
-            }
-            if let Some(value) = request_limits.mods_bypass_limits {
-                self.request_limits.mods_bypass_limits = value;
             }
             if let Some(value) = request_limits.max_track_minutes {
                 self.request_limits.max_track_minutes = value.clamp(1, 30);

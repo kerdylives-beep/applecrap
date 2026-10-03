@@ -143,6 +143,9 @@ Examples:
 !request https://music.apple.com/us/album/freefall-feat-durand-bernarr/1490035834?i=1490036368
 ```
 
+Viewers are held to the queue rules in Setup (queue size, requests per viewer, longest song,
+repeats and links). You and your mods skip all of them.
+
 Remove your latest request:
 
 ```text

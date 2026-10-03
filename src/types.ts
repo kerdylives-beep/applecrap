@@ -49,10 +49,8 @@ export type AppSettings = {
   requestLimits: {
     maxQueueSize: number
     maxPerUser: number
-    cooldownSeconds: number
     allowDuplicates: boolean
     allowLinks: boolean
-    modsBypassLimits: boolean
     maxTrackMinutes: number
   }
   appleMusic: {

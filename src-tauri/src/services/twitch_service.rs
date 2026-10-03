@@ -640,10 +640,9 @@ async fn handle_chat_command(context: &Arc<AppContext>, message: &ChatMessage) -
                 points.title
             ));
         }
-        let is_privileged =
-            message.is_mod_or_broadcaster && settings.request_limits.mods_bypass_limits;
+        // Mods and the broadcaster skip every request limit.
         let result = context
-            .process_request(&message.display_name, &args, is_privileged, "twitch")
+            .process_request(&message.display_name, &args, message.is_mod_or_broadcaster, "twitch")
             .await;
         context
             .add_log(

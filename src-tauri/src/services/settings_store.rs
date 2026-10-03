@@ -426,10 +426,8 @@ impl LegacyTwitchSettings {
 struct LegacyRequestLimits {
     max_queue_size: u32,
     max_per_user: u32,
-    cooldown_seconds: u32,
     allow_duplicates: bool,
     allow_links: bool,
-    mods_bypass_limits: bool,
     max_track_minutes: u32,
 }
 
@@ -446,10 +444,8 @@ impl LegacyRequestLimits {
             } else {
                 self.max_per_user
             },
-            cooldown_seconds: self.cooldown_seconds,
             allow_duplicates: self.allow_duplicates,
             allow_links: self.allow_links,
-            mods_bypass_limits: self.mods_bypass_limits,
             max_track_minutes: if self.max_track_minutes == 0 {
                 10
             } else {

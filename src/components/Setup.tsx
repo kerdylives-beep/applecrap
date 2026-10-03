@@ -275,10 +275,6 @@ export function Setup({ store, state }: { store: AppStore; state: AppState }) {
             <input className={s.input} type="number" min={1} value={limits.maxPerUser} onChange={(event) => store.updateDraft('requestLimits', { maxPerUser: Number(event.target.value) })} />
           </label>
           <label className={s.field}>
-            Wait between requests (seconds)
-            <input className={s.input} type="number" min={0} value={limits.cooldownSeconds} onChange={(event) => store.updateDraft('requestLimits', { cooldownSeconds: Number(event.target.value) })} />
-          </label>
-          <label className={s.field}>
             Longest song (minutes)
             <input className={s.input} type="number" min={1} value={limits.maxTrackMinutes} onChange={(event) => store.updateDraft('requestLimits', { maxTrackMinutes: Number(event.target.value) })} />
           </label>
@@ -291,10 +287,7 @@ export function Setup({ store, state }: { store: AppStore; state: AppState }) {
           <input type="checkbox" checked={limits.allowLinks} onChange={(event) => store.updateDraft('requestLimits', { allowLinks: event.target.checked })} />
           Allow Apple Music links
         </label>
-        <label className={s.check}>
-          <input type="checkbox" checked={limits.modsBypassLimits} onChange={(event) => store.updateDraft('requestLimits', { modsBypassLimits: event.target.checked })} />
-          Mods skip these limits
-        </label>
+        <p className={s.hint}>You and your mods skip all of these.</p>
       </section>
     </div>
   )

@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::models::{AppSettings, QueueHandoffState, QueueItem, ResolutionStatus, TrackMatch};
@@ -67,7 +66,7 @@ pub fn validate_request(
         return Err("Please include a song title or artist.".to_string());
     }
 
-    if !settings.request_limits.allow_links && is_url(normalized_query) {
+    if !is_privileged && !settings.request_limits.allow_links && is_url(normalized_query) {
         return Err("Links are disabled. Request by song title instead.".to_string());
     }
 
@@ -88,23 +87,6 @@ pub fn validate_request(
         ));
     }
 
-    if !is_privileged && settings.request_limits.cooldown_seconds > 0 {
-        let latest_request = user_requests
-            .into_iter()
-            .filter_map(|item| DateTime::parse_from_rfc3339(&item.submitted_at).ok())
-            .map(|timestamp| timestamp.with_timezone(&Utc))
-            .max();
-
-        if let Some(latest_request) = latest_request {
-            let elapsed = Utc::now()
-                .signed_duration_since(latest_request)
-                .num_seconds();
-            if elapsed < settings.request_limits.cooldown_seconds as i64 {
-                return Err("Please wait before requesting another song.".to_string());
-            }
-        }
-    }
-
     Ok(())
 }
 
@@ -114,7 +96,8 @@ pub fn ensure_track_allowed(
     track: &TrackMatch,
     is_privileged: bool,
 ) -> Result<(), String> {
-    if !settings.request_limits.allow_duplicates
+    if !is_privileged
+        && !settings.request_limits.allow_duplicates
         && queue.iter().any(|item| {
             item.track.as_ref().map(|entry| entry.id.as_str()) == Some(track.id.as_str())
         })
@@ -355,6 +338,75 @@ mod tests {
             }),
             ..QueueItem::default()
         }
+    }
+
+    /// Settings with every limit at its tightest.
+    fn strict_settings() -> AppSettings {
+        let mut settings = AppSettings::default();
+        settings.request_limits.max_queue_size = 1;
+        settings.request_limits.max_per_user = 1;
+        settings.request_limits.allow_duplicates = false;
+        settings.request_limits.allow_links = false;
+        settings.request_limits.max_track_minutes = 1;
+        settings
+    }
+
+    fn long_track(id: &str) -> TrackMatch {
+        TrackMatch {
+            id: id.to_string(),
+            title: "Long Song".to_string(),
+            duration_ms: Some(10 * 60 * 1000),
+            ..TrackMatch::default()
+        }
+    }
+
+    #[test]
+    fn mods_skip_every_request_limit() {
+        let settings = strict_settings();
+        let mut queued = queue_item("mod", "first", Some("Long Song"));
+        queued.track.as_mut().unwrap().id = "1".to_string();
+        let queue = vec![queued];
+
+        // Queue full, already has a request, and a link while links are off.
+        let link = "https://music.apple.com/us/album/x/1?i=2";
+        assert!(validate_request(&queue, &settings, "mod", link, true).is_ok());
+        // Already queued, and longer than the length limit.
+        assert!(ensure_track_allowed(&queue, &settings, &long_track("1"), true).is_ok());
+    }
+
+    #[test]
+    fn viewers_are_held_to_each_limit() {
+        let settings = strict_settings();
+        let empty: Vec<QueueItem> = Vec::new();
+        let full = vec![queue_item("someone", "first", None)];
+        let mine = {
+            let mut settings = strict_settings();
+            settings.request_limits.max_queue_size = 10;
+            (settings, vec![queue_item("viewer", "first", None)])
+        };
+
+        let link = "https://music.apple.com/us/album/x/1?i=2";
+        assert!(validate_request(&empty, &settings, "viewer", link, false).is_err());
+        assert!(validate_request(&full, &settings, "viewer", "a song", false).is_err());
+        assert!(validate_request(&mine.1, &mine.0, "viewer", "a song", false).is_err());
+        assert!(validate_request(&empty, &settings, "viewer", "a song", false).is_ok());
+
+        let mut queued = queue_item("someone", "first", Some("Long Song"));
+        queued.track.as_mut().unwrap().id = "1".to_string();
+        let mut short = long_track("1");
+        short.duration_ms = Some(30_000);
+        assert!(ensure_track_allowed(&[queued], &settings, &short, false).is_err());
+        assert!(ensure_track_allowed(&empty, &settings, &long_track("2"), false).is_err());
+    }
+
+    #[test]
+    fn a_viewer_can_request_again_right_away() {
+        // There is no wait between requests any more: only the per-viewer
+        // limit applies.
+        let mut settings = AppSettings::default();
+        settings.request_limits.max_per_user = 3;
+        let queue = vec![queue_item("viewer", "first", None)];
+        assert!(validate_request(&queue, &settings, "viewer", "second", false).is_ok());
     }
 
     #[test]
