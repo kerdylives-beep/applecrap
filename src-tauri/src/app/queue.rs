@@ -138,6 +138,18 @@ impl AppContext {
             .await
     }
 
+    /// Drops a request whose song has started playing. Unlike
+    /// `remove_request`, it never touches the player: the song is meant to
+    /// play.
+    pub(super) async fn retire_playing_request(self: &Arc<Self>, id: &str) {
+        {
+            let mut persisted = self.persisted.write().await;
+            persisted.queue.retain(|item| item.id != id);
+        }
+        let _ = self.save_persisted().await;
+        self.emit_state().await;
+    }
+
     pub async fn remove_request(self: &Arc<Self>, id: &str) -> AppState {
         let removed = {
             let mut persisted = self.persisted.write().await;

@@ -99,7 +99,7 @@ impl AppContext {
                         let mut runtime = self.runtime.write().await;
                         runtime.now_playing_request = top_item.clone();
                     }
-                    let _ = self.remove_request(&queue_id).await;
+                    self.retire_playing_request(&queue_id).await;
                     self.ensure_queue_progress("playback confirmation").await;
                 }
             }

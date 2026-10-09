@@ -226,10 +226,13 @@ impl PlayerBridge {
                     self.withdrawn.lock().await.add(track_id, Instant::now());
                 }
             }
-            UnqueueOutcome::Unsupported => {
+            // "Absent" can also mean the player lists the song under a
+            // different id, so remember it too: a skip that never fires
+            // costs nothing.
+            UnqueueOutcome::Unsupported | UnqueueOutcome::Absent => {
                 self.withdrawn.lock().await.add(track_id, Instant::now());
             }
-            UnqueueOutcome::Removed | UnqueueOutcome::Absent => {}
+            UnqueueOutcome::Removed => {}
         }
         outcome
     }
