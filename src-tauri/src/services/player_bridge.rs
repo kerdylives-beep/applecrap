@@ -11,7 +11,7 @@ use tokio::sync::{oneshot, Mutex, RwLock};
 
 use crate::{
     models::{ProbeSession, ProbeSnapshot, QueueItem},
-    services::queue_engine::{normalize_text, token_overlap},
+    services::queue_engine::{normalize_text, token_overlap, UnqueueOutcome, WithdrawnTracks},
 };
 
 pub const PLAYER_WINDOW_LABEL: &str = "player";
@@ -81,6 +81,8 @@ struct CommandOutcome {
 pub struct PlayerBridge {
     latest: RwLock<Option<(BridgeStatus, Instant)>>,
     pending: Mutex<HashMap<String, oneshot::Sender<CommandOutcome>>>,
+    /// Removed requests the player couldn't take out of its own queue.
+    withdrawn: Mutex<WithdrawnTracks>,
 }
 
 impl PlayerBridge {
@@ -88,6 +90,7 @@ impl PlayerBridge {
         Self {
             latest: RwLock::new(None),
             pending: Mutex::new(HashMap::new()),
+            withdrawn: Mutex::new(WithdrawnTracks::default()),
         }
     }
 
@@ -204,7 +207,47 @@ impl PlayerBridge {
     /// Queue a track as Play Next. This is the only dispatch behaviour AppleCrap
     /// uses: requests are always queued rather than interrupting playback.
     pub async fn dispatch_track(&self, handle: &AppHandle, track_id: &str) -> Result<String> {
+        // A new request for a song that was withdrawn earlier must play.
+        self.withdrawn.lock().await.forget(track_id);
         self.run_command(handle, "queueNext", Some(track_id)).await
+    }
+
+    /// Take a removed request's track back out of the player's queue. When
+    /// the player can't, or doesn't answer, the track is remembered and
+    /// skipped as soon as it starts (`skip_if_withdrawn`).
+    pub async fn withdraw_track(&self, handle: &AppHandle, track_id: &str) -> UnqueueOutcome {
+        let outcome = match self.run_command(handle, "unqueue", Some(track_id)).await {
+            Ok(detail) => UnqueueOutcome::from_detail(&detail),
+            Err(_) => UnqueueOutcome::Unsupported,
+        };
+        match outcome {
+            UnqueueOutcome::Playing => {
+                if self.run_command(handle, "skip", None).await.is_err() {
+                    self.withdrawn.lock().await.add(track_id, Instant::now());
+                }
+            }
+            UnqueueOutcome::Unsupported => {
+                self.withdrawn.lock().await.add(track_id, Instant::now());
+            }
+            UnqueueOutcome::Removed | UnqueueOutcome::Absent => {}
+        }
+        outcome
+    }
+
+    /// Skip the playing track if its request was removed after it was handed
+    /// to the player. Returns the skipped track's title.
+    pub async fn skip_if_withdrawn(&self, handle: &AppHandle) -> Option<String> {
+        let status = self.current_status(handle).await?;
+        let catalog_id = status.catalog_id.as_deref()?;
+        if !self.withdrawn.lock().await.take(catalog_id, Instant::now()) {
+            return None;
+        }
+        if self.run_command(handle, "skip", None).await.is_err() {
+            // Try again on the next probe cycle.
+            self.withdrawn.lock().await.add(catalog_id, Instant::now());
+            return None;
+        }
+        Some(status.title)
     }
 
     /// Build a ProbeSnapshot from the latest bridge status so the existing

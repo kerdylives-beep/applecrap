@@ -7,6 +7,7 @@ use crate::{
     models::{AppleMusicSettings, TrackMatch},
     services::queue_engine::{
         extract_apple_music_track_id, is_url, normalize_text, strip_featuring, token_overlap,
+        tokenize,
     },
 };
 
@@ -84,22 +85,20 @@ impl AppleCatalog {
             return Ok(web);
         }
 
-        // The search API sometimes leaves the original out entirely (seen
-        // with explicit tracks) and returns only covers of it. When the
-        // request names an artist and the best pick isn't theirs, ask the
-        // Apple Music site search, which does list the original.
+        // The search API sometimes leaves the song out entirely: originals
+        // with only covers listed (seen with explicit tracks) and new
+        // releases (seen with "Push Up" by Sullivan King, T-Pain & Zoey808).
+        // When the best pick doesn't fit the request, ask the Apple Music
+        // site search, which does list them. The page is large, so only then.
         if !is_confident(query, &matches) {
             let web = self
                 .fetch_web_search_tracks(query, settings)
                 .await
                 .unwrap_or_default();
-            if let Some(mut original) = web
-                .into_iter()
-                .find(|track| artist_named_in(query, &track.artist_name))
-            {
-                self.fill_in_details(&mut original, settings).await;
-                matches.retain(|track| track.id != original.id);
-                matches.insert(0, original);
+            if let Some(mut better) = pick_web_result(query, &matches[0], web) {
+                self.fill_in_details(&mut better, settings).await;
+                matches.retain(|track| track.id != better.id);
+                matches.insert(0, better);
             }
         }
 
@@ -167,8 +166,12 @@ impl AppleCatalog {
         let song_selector =
             Selector::parse("[data-testid='top-search-result'][aria-label*='Song']")
                 .expect("valid selector");
-        let link_selector = Selector::parse("a.click-action[href*='/album/'][href*='?i=']")
-            .expect("valid selector");
+        // Song results link to the album with `?i=`; newer pages may link to
+        // `/song/` instead, so accept both.
+        let link_selector = Selector::parse(
+            "a.click-action[href*='/album/'][href*='?i='], a.click-action[href*='/song/']",
+        )
+        .expect("valid selector");
 
         let mut matches = Vec::new();
         for element in document.select(&song_selector) {
@@ -186,11 +189,12 @@ impl AppleCatalog {
             let Some((title, artist)) = parse_song_aria_label(label) else {
                 continue;
             };
-            let Some(track_id) = extract_apple_music_track_id(link) else {
+            let Ok(url) = normalize_apple_music_link(link) else {
                 continue;
             };
-
-            let url = normalize_apple_music_link(link)?;
+            let Some(track_id) = extract_apple_music_track_id(&url) else {
+                continue;
+            };
 
             matches.push(TrackMatch {
                 id: track_id,
@@ -207,12 +211,7 @@ impl AppleCatalog {
             return Ok(matches);
         }
 
-        matches.sort_by(|left, right| {
-            score_web_track(query, right)
-                .cmp(&score_web_track(query, left))
-                .then_with(|| left.title.cmp(&right.title))
-        });
-        matches.dedup_by(|left, right| left.id == right.id || left.url == right.url);
+        rank_web_tracks(query, &mut matches);
         Ok(matches)
     }
 
@@ -375,16 +374,91 @@ fn is_cover(title: &str, artist: &str, album: &str) -> bool {
     })
 }
 
-/// Whether the request names this artist ("redbone childish gambino" names
-/// Childish Gambino).
-fn artist_named_in(query: &str, artist: &str) -> bool {
-    let query = strip_featuring(&normalize_text(query));
-    let artist = normalize_text(artist);
-    !artist.is_empty() && format!(" {query} ").contains(&format!(" {artist} "))
+/// The artists in a credit, each normalized: "Sullivan King, T-Pain &
+/// Zoey808" gives ["sullivan king", "t pain", "zoey808"]. The whole credit
+/// is included too, for acts whose name contains "&" or "and".
+fn credited_artists(artist: &str) -> Vec<String> {
+    let mut names = vec![normalize_text(artist)];
+    let lowered = format!(" {} ", artist.to_lowercase());
+    let mut split = lowered.clone();
+    for separator in [",", "&", "+", " and ", " x ", " with ", " feat. ", " feat ", " featuring ", " ft. ", " ft "] {
+        split = split.replace(separator, "|");
+    }
+    for part in split.split('|') {
+        let name = normalize_text(part);
+        if !name.is_empty() && !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    names.retain(|name| !name.is_empty());
+    names
 }
 
-/// False when the request names an artist (as one of the candidates'
-/// artists) but the best pick is someone else's recording.
+/// Whether `name` (normalized) appears in the query as whole words, with or
+/// without its spaces: "tpain" and "t pain" both name "t pain".
+fn name_in_query(query_tokens: &[&str], name: &str) -> bool {
+    let name_tokens = name.split_whitespace().collect::<Vec<_>>();
+    if name_tokens.is_empty() {
+        return false;
+    }
+    if query_tokens.windows(name_tokens.len()).any(|window| window == name_tokens.as_slice()) {
+        return true;
+    }
+    // Compacted or split spellings ("tpain" for "t pain", "t pain" for
+    // "tpain"), only for names long enough not to match by chance.
+    let compact = name_tokens.concat();
+    if compact.len() < 4 {
+        return false;
+    }
+    (1..=name_tokens.len().max(3)).any(|width| {
+        query_tokens
+            .windows(width)
+            .any(|window| window.concat() == compact)
+    })
+}
+
+/// The credited artists the request names ("redbone childish gambino"
+/// names Childish Gambino; "tpain push up" names T-Pain in "Sullivan King,
+/// T-Pain & Zoey808").
+fn named_artists(query: &str, artist: &str) -> Vec<String> {
+    let query = strip_featuring(&normalize_text(query));
+    let query_tokens = query.split_whitespace().collect::<Vec<_>>();
+    credited_artists(artist)
+        .into_iter()
+        .filter(|name| name_in_query(&query_tokens, name))
+        .collect()
+}
+
+/// Whether the request names this artist, or any one artist in its credit.
+fn artist_named_in(query: &str, artist: &str) -> bool {
+    !named_artists(query, artist).is_empty()
+}
+
+/// Words a request can carry that are never part of what it asks for.
+const FILLER_WORDS: &[&str] = &["by", "song", "please", "pls", "plz"];
+
+/// Whether the track's title holds every word of the request that isn't
+/// one of its credited artists ("push up" isn't covered by "Up").
+fn title_covers_request(query: &str, track: &TrackMatch) -> bool {
+    let query = strip_featuring(&normalize_text(query));
+    let mut artist_words = std::collections::HashSet::new();
+    for name in named_artists(&query, &track.artist_name) {
+        artist_words.extend(name.split_whitespace().map(str::to_string));
+        artist_words.insert(name.replace(' ', ""));
+    }
+    let title = strip_featuring(&normalize_text(&track.title));
+    let title_words = tokenize(&title);
+    // "dont" is in "Don't" once the spaces are gone.
+    let title_compact = title.replace(' ', "");
+    query
+        .split_whitespace()
+        .filter(|word| !artist_words.contains(*word) && !FILLER_WORDS.contains(word))
+        .all(|word| title_words.contains(word) || title_compact.contains(word))
+}
+
+/// False when the best pick looks wrong for the request: another candidate
+/// is by an artist the request names but the pick isn't, or the pick's
+/// title is missing words the request asked for.
 fn is_confident(query: &str, ranked: &[TrackMatch]) -> bool {
     let Some(best) = ranked.first() else {
         return false;
@@ -392,7 +466,18 @@ fn is_confident(query: &str, ranked: &[TrackMatch]) -> bool {
     let named = ranked
         .iter()
         .any(|track| artist_named_in(query, &track.artist_name));
-    !named || artist_named_in(query, &best.artist_name)
+    let right_artist = !named || artist_named_in(query, &best.artist_name);
+    right_artist && title_covers_request(query, best)
+}
+
+/// The site search result to use instead of the search API's best pick:
+/// its top result, when that scores higher than the pick by the same
+/// measure. A tie keeps the pick.
+fn pick_web_result(query: &str, best: &TrackMatch, web: Vec<TrackMatch>) -> Option<TrackMatch> {
+    let best_score = score_web_track(query, best);
+    web.into_iter()
+        .next()
+        .filter(|top| top.id != best.id && score_web_track(query, top) > best_score)
 }
 
 fn score_track(query: &str, song: &ItunesSong) -> i32 {
@@ -435,6 +520,8 @@ fn score_track(query: &str, song: &ItunesSong) -> i32 {
     }
     if !artist.is_empty() && query_normalized.contains(&artist) {
         score += 70;
+    } else if artist_named_in(&query_normalized, song.artist_name.as_deref().unwrap_or_default()) {
+        score += 60;
     }
     if !query_normalized.is_empty() && artist.contains(&query_normalized) {
         score += 30;
@@ -486,6 +573,16 @@ fn score_track(query: &str, song: &ItunesSong) -> i32 {
     score
 }
 
+/// Best site search result first, duplicates dropped.
+fn rank_web_tracks(query: &str, matches: &mut Vec<TrackMatch>) {
+    matches.sort_by(|left, right| {
+        score_web_track(query, right)
+            .cmp(&score_web_track(query, left))
+            .then_with(|| left.title.cmp(&right.title))
+    });
+    matches.dedup_by(|left, right| left.id == right.id || left.url == right.url);
+}
+
 fn score_web_track(query: &str, track: &TrackMatch) -> i32 {
     let query_normalized = strip_featuring(&normalize_text(query));
     let title = strip_featuring(&normalize_text(&track.title));
@@ -505,6 +602,8 @@ fn score_web_track(query: &str, track: &TrackMatch) -> i32 {
     }
     if !artist.is_empty() && query_normalized.contains(&artist) {
         score += 70;
+    } else if artist_named_in(&query_normalized, &track.artist_name) {
+        score += 60;
     }
     score += (token_overlap(&title, &query_normalized) * 160.0).round() as i32;
     score += (token_overlap(&artist, &query_normalized) * 90.0).round() as i32;
@@ -585,6 +684,94 @@ mod tests {
         assert!(is_confident("redbone", &[matched("1", "Redbone", "Lofi Fruits Music")]));
         // Artists match on whole words only.
         assert!(!artist_named_in("human nature michael jackson", "Jackson 5"));
+    }
+
+    // Regression tests from a real chat log (2026-10-04): "Push Up" by
+    // Sullivan King, T-Pain & Zoey808 (catalog id 6774717255). The search
+    // API didn't return it for these requests; the site search lists it
+    // first.
+    fn push_up() -> TrackMatch {
+        matched("6774717255", "Push Up", "Sullivan King, T-Pain & Zoey808")
+    }
+
+    fn site_results(query: &str) -> Vec<TrackMatch> {
+        let mut web = vec![
+            matched("1", "Up", "Cardi B"),
+            push_up(),
+            matched("2", "BLOODBATH (feat. Sullivan King)", "Excision"),
+        ];
+        rank_web_tracks(query, &mut web);
+        web
+    }
+
+    #[test]
+    fn splits_multi_artist_credits() {
+        assert_eq!(
+            credited_artists("Sullivan King, T-Pain & Zoey808"),
+            vec!["sullivan king t pain zoey808", "sullivan king", "t pain", "zoey808"]
+        );
+        assert!(credited_artists("Lil Nas X").contains(&"lil nas x".to_string()));
+        assert!(credited_artists("Daft Punk feat. Pharrell Williams").contains(&"pharrell williams".to_string()));
+    }
+
+    #[test]
+    fn any_credited_artist_counts_as_named_in_any_spelling() {
+        let credit = "Sullivan King, T-Pain & Zoey808";
+        assert!(artist_named_in("tpain push up", credit));
+        assert!(artist_named_in("T-Pain Push Up", credit));
+        assert!(artist_named_in("push up sullivan king", credit));
+        assert!(artist_named_in("push up sullivan king t-pain zoey808", credit));
+        assert!(!artist_named_in("push up", credit));
+        // A split spelling of a one-word name.
+        assert!(artist_named_in("t pain buy u a drank", "TPain"));
+        // Still whole words only.
+        assert!(!artist_named_in("human nature michael jackson", "Jackson 5"));
+        assert!(!artist_named_in("upside down", "Sullivan King, T-Pain & Zoey808"));
+    }
+
+    #[test]
+    fn wrong_picks_for_push_up_trigger_a_second_look() {
+        // What each request queued in 0.8.0.
+        for (query, wrong) in [
+            ("tpain push up", matched("1", "Up", "Cardi B")),
+            ("T-Pain Push Up", matched("1", "Up", "Cardi B")),
+            ("push up sullivan king", matched("2", "BLOODBATH (feat. Sullivan King)", "Excision")),
+            ("push up sullivan king", matched("3", "BLOODBATH", "Excision & Sullivan King")),
+        ] {
+            assert!(!is_confident(query, &[wrong]), "{query}");
+        }
+        // The full credit already worked, and the right pick stays put.
+        assert!(is_confident("push up sullivan king t-pain zoey808", &[push_up()]));
+        assert!(is_confident("tpain push up", &[push_up()]));
+        assert!(is_confident("push up by sullivan king", &[push_up()]));
+        assert!(is_confident("dont stop me now queen", &[matched("4", "Don't Stop Me Now", "Queen")]));
+    }
+
+    #[test]
+    fn site_search_result_replaces_a_worse_pick() {
+        for (query, wrong) in [
+            ("tpain push up", matched("1", "Up", "Cardi B")),
+            ("T-Pain Push Up", matched("1", "Up", "Cardi B")),
+            ("push up sullivan king", matched("2", "BLOODBATH (feat. Sullivan King)", "Excision")),
+        ] {
+            let pick = pick_web_result(query, &wrong, site_results(query));
+            assert_eq!(pick.map(|track| track.id).as_deref(), Some("6774717255"), "{query}");
+        }
+    }
+
+    #[test]
+    fn site_search_never_replaces_an_equal_or_better_pick() {
+        let query = "human nature michael jackson thriller";
+        let best = matched("10", "Human Nature", "Michael Jackson");
+        assert!(!is_confident(query, &[best.clone()]));
+        let mut web = vec![
+            matched("11", "Thriller", "Michael Jackson"),
+            best.clone(),
+        ];
+        rank_web_tracks(query, &mut web);
+        assert!(pick_web_result(query, &best, web).is_none());
+        // The pick itself at the top of the site search changes nothing.
+        assert!(pick_web_result("tpain push up", &push_up(), vec![push_up()]).is_none());
     }
 
     #[test]

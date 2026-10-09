@@ -36,6 +36,10 @@ pub fn is_url(value: &str) -> bool {
     value.starts_with("http://") || value.starts_with("https://")
 }
 
+/// The catalog song id in an Apple Music link, from either link style:
+/// - album links with the song in `?i=`: `/us/album/{slug}/{album-id}?i={id}`
+/// - song links: `/us/song/{slug}/{id}` (or `/us/song/{id}`), which the
+///   Share button produces for singles and new releases.
 pub fn extract_apple_music_track_id(value: &str) -> Option<String> {
     let parsed = reqwest::Url::parse(value).ok()?;
     let hostname = parsed.host_str()?.to_lowercase();
@@ -43,15 +47,23 @@ pub fn extract_apple_music_track_id(value: &str) -> Option<String> {
         return None;
     }
 
-    let track_id = parsed.query_pairs().find_map(|(key, value)| {
-        if key == "i" && value.chars().all(|character| character.is_ascii_digit()) {
-            Some(value.to_string())
-        } else {
-            None
-        }
-    })?;
+    let is_id = |value: &str| !value.is_empty() && value.chars().all(|character| character.is_ascii_digit());
 
-    Some(track_id)
+    if let Some(track_id) = parsed.query_pairs().find_map(|(key, value)| {
+        (key == "i" && is_id(&value)).then(|| value.to_string())
+    }) {
+        return Some(track_id);
+    }
+
+    // `/{storefront}/song/...`: the id is the last path segment.
+    let segments = parsed
+        .path_segments()?
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>();
+    match segments.as_slice() {
+        [_storefront, "song", .., last] if is_id(last) => Some((*last).to_string()),
+        _ => None,
+    }
 }
 
 pub fn validate_request(
@@ -269,6 +281,62 @@ pub fn remove_latest_request_by_user(
     Some(queue.remove(index))
 }
 
+/// What the player did when asked to drop a withdrawn request from its own
+/// queue (the bridge's `unqueue` answer).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnqueueOutcome {
+    /// Taken out of Playing Next.
+    Removed,
+    /// Not in the player's queue (already played, or never arrived).
+    Absent,
+    /// It is the track playing now: skip it.
+    Playing,
+    /// The player can't remove queue items: skip it when it starts.
+    Unsupported,
+}
+
+impl UnqueueOutcome {
+    pub fn from_detail(detail: &str) -> Self {
+        match detail.split(':').next().unwrap_or_default().trim() {
+            "removed" => Self::Removed,
+            "absent" => Self::Absent,
+            "playing" => Self::Playing,
+            _ => Self::Unsupported,
+        }
+    }
+}
+
+/// Tracks whose requests were removed after they were handed to the player,
+/// when the player couldn't take them back out of its queue. Each is skipped
+/// once, as soon as it starts. Entries expire, and queueing the same track
+/// again forgets it, so a later request for that song still plays.
+#[derive(Debug, Default)]
+pub struct WithdrawnTracks {
+    entries: Vec<(String, std::time::Instant)>,
+}
+
+impl WithdrawnTracks {
+    const KEEP_FOR: std::time::Duration = std::time::Duration::from_secs(3 * 60 * 60);
+
+    pub fn add(&mut self, track_id: &str, now: std::time::Instant) {
+        self.entries.retain(|(id, _)| id != track_id);
+        self.entries.push((track_id.to_string(), now));
+    }
+
+    pub fn forget(&mut self, track_id: &str) {
+        self.entries.retain(|(id, _)| id != track_id);
+    }
+
+    /// True (once) when this track was withdrawn and should be skipped.
+    pub fn take(&mut self, track_id: &str, now: std::time::Instant) -> bool {
+        self.entries
+            .retain(|(_, added)| now.saturating_duration_since(*added) < Self::KEEP_FOR);
+        let before = self.entries.len();
+        self.forget(track_id);
+        self.entries.len() != before
+    }
+}
+
 pub fn token_overlap(left: &str, right: &str) -> f32 {
     let left_tokens = tokenize(left);
     let right_tokens = tokenize(right);
@@ -305,6 +373,66 @@ mod tests {
             extract_apple_music_track_id(url).as_deref(),
             Some("1490036368")
         );
+    }
+
+    #[test]
+    fn extracts_track_id_from_song_links() {
+        // Bug from 2026-10-04: this link (a 500-point Channel Points
+        // redemption) went to manual review.
+        assert_eq!(
+            extract_apple_music_track_id("https://music.apple.com/us/song/push-up/6774717255").as_deref(),
+            Some("6774717255")
+        );
+        assert_eq!(
+            extract_apple_music_track_id("https://music.apple.com/gb/song/push-up/6774717255?l=en-GB").as_deref(),
+            Some("6774717255")
+        );
+        assert_eq!(
+            extract_apple_music_track_id("https://music.apple.com/us/song/6774717255").as_deref(),
+            Some("6774717255")
+        );
+        // Not songs: albums without `?i=`, artists, playlists.
+        assert_eq!(extract_apple_music_track_id("https://music.apple.com/us/album/thriller/269572838"), None);
+        assert_eq!(extract_apple_music_track_id("https://music.apple.com/us/artist/t-pain/1150540"), None);
+        assert_eq!(extract_apple_music_track_id("https://music.apple.com/us/song/push-up/not-an-id"), None);
+        assert_eq!(
+            extract_apple_music_track_id("https://evil-music.apple.com.example/us/song/push-up/6774717255"),
+            None
+        );
+    }
+
+    #[test]
+    fn reads_the_players_unqueue_answer() {
+        assert_eq!(UnqueueOutcome::from_detail("removed: taken out of Playing Next"), UnqueueOutcome::Removed);
+        assert_eq!(UnqueueOutcome::from_detail("absent: not in the player queue"), UnqueueOutcome::Absent);
+        assert_eq!(UnqueueOutcome::from_detail("playing: it is the current track"), UnqueueOutcome::Playing);
+        assert_eq!(UnqueueOutcome::from_detail("unsupported: no remove"), UnqueueOutcome::Unsupported);
+        assert_eq!(UnqueueOutcome::from_detail("something new"), UnqueueOutcome::Unsupported);
+    }
+
+    #[test]
+    fn withdrawn_tracks_are_skipped_once() {
+        let now = std::time::Instant::now();
+        let mut withdrawn = WithdrawnTracks::default();
+        withdrawn.add("6774717255", now);
+        assert!(!withdrawn.take("1440", now));
+        assert!(withdrawn.take("6774717255", now));
+        // Only once.
+        assert!(!withdrawn.take("6774717255", now));
+    }
+
+    #[test]
+    fn requeueing_or_waiting_clears_a_withdrawn_track() {
+        let now = std::time::Instant::now();
+        let mut withdrawn = WithdrawnTracks::default();
+        withdrawn.add("6774717255", now);
+        // Someone requests the same song again: it must play.
+        withdrawn.forget("6774717255");
+        assert!(!withdrawn.take("6774717255", now));
+
+        withdrawn.add("6774717255", now);
+        let later = now + std::time::Duration::from_secs(4 * 60 * 60);
+        assert!(!withdrawn.take("6774717255", later));
     }
 
     #[test]

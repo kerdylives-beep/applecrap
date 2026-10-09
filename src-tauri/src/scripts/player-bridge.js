@@ -345,6 +345,41 @@
               }
             }
             return done(true, 'Queued to play next.')
+          case 'unqueue': {
+            // Take a withdrawn request back out of Playing Next. Answers
+            // start with removed / absent / playing / unsupported; the app
+            // reads that word.
+            const queue = music.queue
+            const items = (queue && queue.items) || []
+            const position = queue && typeof queue.position === 'number' ? queue.position : -1
+            const idOf = (item) => {
+              const params =
+                (item && item.attributes && item.attributes.playParams) || (item && item.playParams) || {}
+              return String(params.catalogId || params.id || (item && item.id) || '')
+            }
+            const wanted = String(id)
+            const upcoming = () =>
+              ((queue && queue.items) || []).filter((item, i) => i > position && idOf(item) === wanted).length
+            const index = items.findIndex((item, i) => i >= position && idOf(item) === wanted)
+            if (index === -1) {
+              return done(true, 'absent: not in the player queue')
+            }
+            if (index === position) {
+              return done(true, 'playing: it is the current track')
+            }
+            if (queue && typeof queue.remove === 'function') {
+              const before = upcoming()
+              try {
+                await queue.remove(index)
+              } catch (_) {
+                /* fall through to the check */
+              }
+              if (upcoming() < before) {
+                return done(true, 'removed: taken out of Playing Next')
+              }
+            }
+            return done(true, 'unsupported: the player queue cannot remove items')
+          }
           case 'queueLater':
             await music.playLater({ song: id })
             return done(true, 'Queued at the end of Playing Next.')

@@ -25,6 +25,16 @@ impl AppContext {
             .await;
         self.note_player_status(&snapshot.status).await;
 
+        // A request removed after it reached the player: skip it the moment
+        // it starts, when the player couldn't take it out of its queue.
+        if let Some(title) = self.player_bridge.skip_if_withdrawn(&self.handle).await {
+            self.add_log(
+                LogLevel::Info,
+                format!("Skipped \"{title}\": its request was removed."),
+            )
+            .await;
+        }
+
         #[cfg(desktop)]
         self.sync_media_key_claim(&snapshot).await;
 

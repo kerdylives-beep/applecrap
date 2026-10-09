@@ -139,9 +139,14 @@ impl AppContext {
     }
 
     pub async fn remove_request(self: &Arc<Self>, id: &str) -> AppState {
-        {
+        let removed = {
             let mut persisted = self.persisted.write().await;
+            let removed = persisted.queue.iter().find(|item| item.id == id).cloned();
             persisted.queue.retain(|item| item.id != id);
+            removed
+        };
+        if let Some(item) = removed {
+            self.withdraw_from_player(&item).await;
         }
         let _ = self.save_persisted().await;
         self.emit_state().await;
@@ -169,7 +174,8 @@ impl AppContext {
         };
 
         match removed {
-            Some(_) => {
+            Some(item) => {
+                self.withdraw_from_player(&item).await;
                 let _ = self.save_persisted().await;
                 self.emit_state().await;
                 self.add_log(
@@ -180,8 +186,53 @@ impl AppContext {
                 self.ensure_queue_progress("user remove").await;
                 CommandResult::ok("Removed your most recent request.")
             }
+            // Nothing waiting, but their own request may be the one playing.
+            None if self.is_playing_request_of(requested_by).await => {
+                match self.player_bridge.run_command(&self.handle, "skip", None).await {
+                    Ok(_) => {
+                        self.runtime.write().await.now_playing_request = None;
+                        self.add_log(
+                            LogLevel::Info,
+                            format!("Skipped the playing request for {requested_by} (!remove)."),
+                        )
+                        .await;
+                        CommandResult::ok("Skipped your song.")
+                    }
+                    Err(error) => CommandResult::error(format!("Couldn't skip your song: {error}")),
+                }
+            }
             None => CommandResult::error("You do not have any active requests to remove."),
         }
+    }
+
+    /// Whether the track playing now is this viewer's request.
+    async fn is_playing_request_of(&self, requested_by: &str) -> bool {
+        let runtime = self.runtime.read().await;
+        overlay::current_request(&runtime)
+            .is_some_and(|request| request.requested_by.eq_ignore_ascii_case(requested_by))
+    }
+
+    /// A request removed after it was handed to the player also has to leave
+    /// the player's own queue, or the song still plays.
+    async fn withdraw_from_player(&self, item: &QueueItem) {
+        if item.handoff_state != QueueHandoffState::SentToPlayer {
+            return;
+        }
+        let Some(track) = item.track.as_ref() else {
+            return;
+        };
+        let outcome = self.player_bridge.withdraw_track(&self.handle, &track.id).await;
+        let note = match outcome {
+            queue_engine::UnqueueOutcome::Removed => "taken out of Apple Music's Playing Next",
+            queue_engine::UnqueueOutcome::Absent => "it was no longer in Apple Music's queue",
+            queue_engine::UnqueueOutcome::Playing => "it was already playing, so it was skipped",
+            queue_engine::UnqueueOutcome::Unsupported => "it will be skipped when it starts",
+        };
+        self.add_log(
+            LogLevel::Info,
+            format!("Withdrew \"{}\" from the player: {note}.", track.title),
+        )
+        .await;
     }
 
     pub async fn search_apple_music(&self, query: &str) -> Result<SearchResult> {
