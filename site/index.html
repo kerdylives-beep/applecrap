@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crabapple</title>
+<meta name="description" content="Song requests for Apple Music streamers. Chat commands or Channel Points, stream overlays, and the player built in.">
+<meta property="og:title" content="Crabapple">
+<meta property="og:description" content="Song requests for Apple Music streamers.">
+<link rel="icon" href="crabapple-crab.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Saira+Semi+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#14080d}
+a{color:#ff8a97}a:hover{color:#ffb3bb}
+@keyframes crab-nudge{0%,100%{transform:translateY(0)}50%{transform:translateY(8px)}}
+@keyframes crab-spin{to{transform:rotate(360deg)}}
+@keyframes crab-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(0.8)}}
+sc-for, sc-if { display: contents; }
+</style>
+</head>
+<body>
+<noscript><p style="font-family: system-ui, sans-serif; padding: 24px; color: #f6ecee">Crabapple's page needs JavaScript. The beta is on the <a href="https://github.com/kerdylives-beep/applecrap/releases">releases page</a>.</p></noscript>
+<div id="app">
+<div id="crab-track" style="position: relative; height: 740vh; width: 100%; font-family: 'DM Sans', system-ui, sans-serif; color: #f6ecee">
+<div style="position: sticky; top: 0; height: 100vh; width: 100%; overflow: hidden; {{bg}}">
+
+<!-- ambient layers -->
+<sc-for list="{{orbs}}" as="o">
+<div style="position: absolute; left: 0; top: 0; border-radius: 50%; pointer-events: none; will-change: transform; {{o.style}}"></div>
+</sc-for>
+<div style="position: absolute; right: clamp(24px, 5vw, 80px); bottom: 4vh; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 30vw; line-height: 0.8; color: transparent; -webkit-text-stroke: 2px rgba(255,84,104,0.16); pointer-events: none; {{ghostStyle}}">{{counter}}</div>
+<sc-for list="{{sparks}}" as="s">
+<div style="position: absolute; border-radius: 50%; background: #ffd9de; pointer-events: none; {{s.style}}"></div>
+</sc-for>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 110px; display: flex; align-items: flex-end; gap: 6px; padding: 0 6px; box-sizing: border-box; pointer-events: none">
+<sc-for list="{{floorBars}}" as="b">
+<div style="flex: 1; border-radius: 3px 3px 0 0; background: #ff5468; {{b.style}}"></div>
+</sc-for>
+</div>
+
+<!-- SCENE 0: hero -->
+<div style="position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 24px 48px; padding: 0 clamp(20px, 6vw, 96px); box-sizing: border-box; {{s0.wrap}}">
+<div style="flex: 1 1 360px; max-width: 680px; {{s0.text}}">
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: #ff8a97; margin-bottom: 16px">Song requests for Apple Music streamers</div>
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(56px, 11vw, 168px); line-height: 0.9; letter-spacing: -0.04em">Crabapple</h1>
+<p style="margin: 24px 0 0; font-size: clamp(18px, 2vw, 24px); line-height: 1.45; color: rgba(246,236,238,0.78); max-width: 460px">The only song request app that plays Apple Music for your chat.</p>
+<div style="margin-top: 40px; display: flex; align-items: center; gap: 12px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: rgba(246,236,238,0.7)">
+<span style="display: inline-block; will-change: transform; animation: crab-nudge 1.6s ease-in-out infinite">↓</span><span>Scroll to see how</span>
+</div>
+</div>
+<div style="flex: 1 1 300px; max-width: 460px; display: flex; justify-content: center; {{s0.vis}}">
+<div style="width: min(100%, 420px); aspect-ratio: 1 / 1; border-radius: 50%; background: repeating-radial-gradient(circle at center, #0c0709 0px, #0c0709 3px, #1b1116 4px, #0c0709 5px); box-shadow: 0 30px 80px rgba(0,0,0,0.55); position: relative; will-change: transform; {{vinyl}}">
+<div style="position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 20deg, rgba(255,255,255,0) 0deg, rgba(255,255,255,0.10) 40deg, rgba(255,255,255,0) 90deg, rgba(255,255,255,0) 200deg, rgba(255,255,255,0.08) 240deg, rgba(255,255,255,0) 290deg)"></div>
+<div style="position: absolute; left: 50%; top: 50%; width: 34%; aspect-ratio: 1 / 1; margin: -17% 0 0 -17%; border-radius: 50%; background: #ff5468; display: flex; align-items: center; justify-content: center">
+<svg viewBox="0 0 64 64" width="56%" height="56%" aria-hidden="true"><path d="M32 18c-6-6-20-4-20 14 0 14 9 24 16 24 3 0 3-1 4-1s1 1 4 1c7 0 16-10 16-24 0-18-14-20-20-14z" fill="#1a0a0e"/><path d="M33 16c0-6 4-10 10-11-1 6-4 10-10 11z" fill="#1a0a0e"/></svg>
+</div>
+</div>
+</div>
+</div>
+
+<!-- SCENE 1: apple music gap -->
+<div style="position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 24px 48px; padding: 0 clamp(20px, 6vw, 96px); box-sizing: border-box; {{s1.wrap}}">
+<div style="flex: 1 1 360px; max-width: 560px; {{s1.text}}">
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: #ff8a97; margin-bottom: 16px">01 · Built for Apple Music</div>
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 5.6vw, 72px); line-height: 1; letter-spacing: -0.03em; text-wrap: balance">Made only for Apple Music.</h2>
+<p style="margin: 20px 0 0; font-size: clamp(16px, 1.6vw, 20px); line-height: 1.5; color: rgba(246,236,238,0.78)">Crabapple doesn't try to cover every service. It takes requests and plays them through Apple Music, and that is the whole job.</p>
+</div>
+<div style="flex: 1 1 320px; max-width: 480px; display: flex; flex-direction: column; gap: 16px; {{s1.vis}}">
+<div style="position: relative; width: 100%; max-width: 340px; align-self: center; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center">
+<sc-for list="{{rings}}" as="g">
+<div style="position: absolute; inset: 0; border-radius: 50%; border: 2px solid #ff5468; {{g.style}}"></div>
+</sc-for>
+<div style="position: relative; width: 52%; aspect-ratio: 1 / 1; border-radius: 50%; background: #ff5468; display: flex; align-items: center; justify-content: center; box-shadow: 0 20px 60px rgba(0,0,0,0.5); {{coreStyle}}"><svg viewBox="0 0 64 64" width="56%" height="56%" aria-hidden="true"><path d="M32 18c-6-6-20-4-20 14 0 14 9 24 16 24 3 0 3-1 4-1s1 1 4 1c7 0 16-10 16-24 0-18-14-20-20-14z" fill="#1a0a0e"/><path d="M33 16c0-6 4-10 10-11-1 6-4 10-10 11z" fill="#1a0a0e"/></svg></div>
+</div>
+<div style="text-align: center; {{labelStyle}}">
+<div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(32px, 4vw, 48px)">Apple Music</div>
+<div style="margin-top: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #8be9b0">The one service Crabapple supports</div>
+</div>
+</div>
+</div>
+
+<!-- SCENE 2: chat commands or channel points -->
+<div style="position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 24px 48px; padding: 0 clamp(20px, 6vw, 96px); box-sizing: border-box; {{s2.wrap}}">
+<div style="flex: 1 1 360px; max-width: 560px; {{s2.text}}">
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: #ff8a97; margin-bottom: 16px">02 · Your rules</div>
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 5.6vw, 72px); line-height: 1; letter-spacing: -0.03em; text-wrap: balance">Chat commands or Channel Points.</h2>
+<p style="margin: 20px 0 0; font-size: clamp(16px, 1.6vw, 20px); line-height: 1.5; color: rgba(246,236,238,0.78)">Viewers can type a command or spend Channel Points, whichever you turn on. Mods skip every request limit.</p>
+</div>
+<div style="flex: 1 1 320px; max-width: 480px; display: flex; flex-direction: column; gap: 16px; {{s2.vis}}">
+<div style="background: #1a1a26; border-radius: 16px; padding: 20px; box-shadow: 0 30px 80px rgba(0,0,0,0.5); {{cardA}}">
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(246,236,238,0.65); margin-bottom: 14px">Chat commands</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 15px; line-height: 1.7"><span style="color: #7fd4ff">mika</span>: !sr blinding lights<br><span style="color: #ffd479">dex</span>: !remove espresso</div>
+</div>
+<div style="background: #1d1530; border-radius: 16px; padding: 20px; box-shadow: 0 30px 80px rgba(0,0,0,0.5); {{cardB}}">
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(246,236,238,0.65); margin-bottom: 14px">Channel Points</div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; background: rgba(255,255,255,0.07); border-radius: 10px; padding: 12px 14px">
+<span style="font-weight: 500; font-size: 16px">Request a song</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #1a0a0e; background: #c9a7ff; border-radius: 6px; padding: 4px 10px">Redeem</span>
+</div>
+</div>
+</div>
+</div>
+
+<!-- SCENE 3: overlay styles (two scroll units long) -->
+<div style="position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 24px 48px; padding: 0 clamp(20px, 6vw, 96px); box-sizing: border-box; {{s3.wrap}}">
+<div style="flex: 1 1 360px; max-width: 520px; {{s3.text}}">
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: #ff8a97; margin-bottom: 16px">03 · Overlays</div>
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 5.6vw, 72px); line-height: 1; letter-spacing: -0.03em; text-wrap: balance">Four ways to show what's playing.</h2>
+<p style="margin: 20px 0 0; font-size: clamp(16px, 1.6vw, 20px); line-height: 1.5; color: rgba(246,236,238,0.78)">Pick a style in the app and paste its address into OBS as a Browser source. The background is transparent, so it sits over your scene as is.</p>
+<div style="margin-top: 24px; display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{styleChips}}" as="c">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; border-radius: 99px; padding: 8px 14px; min-height: 20px; {{c.style}}">{{c.name}}</span>
+</sc-for>
+</div>
+</div>
+<div style="flex: 1 1 320px; max-width: 520px; {{s3.vis}}">
+<div style="position: relative; width: 100%; aspect-ratio: 16 / 10; border-radius: 14px; background: #0d1a16; border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 30px 80px rgba(0,0,0,0.5); overflow: hidden">
+<div style="position: absolute; left: 14px; top: 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(246,236,238,0.6)">Your stream</div>
+
+<!-- the four real styles -->
+<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; {{ov0.wrap}}">
+<div style="width: 520px; max-width: 100%; zoom: 0.68; display: flex; flex-direction: column">
+<div style="display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 14px; width: 100%; padding: 12px; box-sizing: border-box; border-radius: 14px; background: rgba(18,17,20,0.9); border: 1px solid rgba(255,255,255,0.07); overflow: hidden">
+<div style="width: 76px; height: 76px; border-radius: 10px; background: #2b2119; overflow: hidden"><img src="crabapple-crab.png" alt="" style="display: block; width: 100%; height: 100%; object-fit: contain"></div>
+<div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left">
+<div style="display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; font: 600 10px 'Saira Semi Condensed', sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: #f2a93b"><span style="width: 6px; height: 6px; border-radius: 50%; background: #f2a93b; opacity: 0.9;"></span><span style="flex: none">Now playing</span><span style="flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 500 11px 'IBM Plex Sans', 'Segoe UI', sans-serif; letter-spacing: 0; text-transform: none; color: #c8c3cc"><span style="margin-right: 7px">·</span>Request: !sr + song or 500 points</span></div>
+<div style="font: 700 23px/1.15 'Saira Semi Condensed', sans-serif; color: #f2efea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Crabapple Jam</div>
+<div style="font-size: 13px; color: #c8c3cc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Crabapple house band <span style="color: #8a8591">·</span> requested by <span style="color: #c9beff">@you</span></div>
+<div style="height: 3px; margin-top: 7px"><div style="height: 100%; border-radius: 2px; background: rgba(255,255,255,0.1); overflow: hidden"><div style="height: 100%; border-radius: 2px; background: #f2a93b; transition: width 1s linear; {{ov0.fill}}"></div></div></div>
+</div>
+</div>
+</div>
+</div>
+<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; {{ov1.wrap}}">
+<div style="width: 400px; max-width: 100%; zoom: 0.68; display: flex; flex-direction: column">
+<div style="position: relative; width: min(100%, 400px); align-self: center; height: 40px; box-sizing: border-box; border-radius: 999px; background: rgba(18,17,20,0.9); border: 1px solid rgba(255,255,255,0.07); overflow: hidden">
+<div style="position: absolute; left: 0; top: 0; bottom: 0; background: color-mix(in srgb, #f2a93b 42%, rgba(18,17,20,0.9)); border-right: 2px solid #f2a93b; transition: width 1s linear; {{ov1.fill}}"></div>
+<div style="position: relative; display: flex; align-items: center; height: 100%; padding: 0 20px; white-space: nowrap; overflow: hidden"><span style="font: 700 17px 'Saira Semi Condensed', sans-serif; color: #f2efea">Crabapple Jam</span><span style="margin-left: 8px; font: 600 12px 'Saira Semi Condensed', sans-serif; letter-spacing: 0.12em; text-transform: uppercase; color: #c8c3cc">Crabapple house band</span></div>
+</div>
+</div>
+</div>
+<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; {{ov2.wrap}}">
+<div style="width: 360px; max-width: 100%; display: flex; flex-direction: column">
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; width: 360px; max-width: 100%; align-self: center; box-sizing: border-box; padding: 20px; border-radius: 22px; background: rgba(10,10,12,0.55); border: 1px solid rgba(255,255,255,0.07); overflow: hidden; zoom: 0.6">
+<div style="position: absolute; inset: 0; background: radial-gradient(circle at 25% 15%, rgba(236,112,72,0.55), rgba(236,112,72,0) 65%), radial-gradient(circle at 85% 85%, rgba(242,169,59,0.3), rgba(242,169,59,0) 60%), #17110f"></div>
+<div style="position: relative; width: 100%; aspect-ratio: 1; border-radius: 14px; background: #2b2119; box-shadow: 0 12px 32px rgba(0,0,0,0.5); overflow: hidden"><img src="crabapple-crab.png" alt="" style="display: block; width: 100%; height: 100%; object-fit: contain"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 3px; min-width: 0; text-align: left">
+<div style="display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; font: 600 10px 'Saira Semi Condensed', sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: #f2a93b"><span style="width: 6px; height: 6px; border-radius: 50%; background: #f2a93b; opacity: 0.9;"></span><span style="flex: none">Now playing</span><span style="flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 500 11px 'IBM Plex Sans', 'Segoe UI', sans-serif; letter-spacing: 0; text-transform: none; color: #c8c3cc"><span style="margin-right: 7px">·</span>Request: !sr + song or 500 points</span></div>
+<div style="font: 700 28px/1.15 'Saira Semi Condensed', sans-serif; color: #f2efea">Crabapple Jam</div>
+<div style="font-size: 14px; color: #c8c3cc">Crabapple house band <span style="color: #8a8591">·</span> requested by <span style="color: #c9beff">@you</span></div>
+<div style="position: relative; height: 3px; margin-top: 14px"><div style="height: 100%; border-radius: 2px; background: rgba(255,255,255,0.18); overflow: hidden"><div style="height: 100%; border-radius: 2px; background: #f2a93b; transition: width 1s linear; {{ov2.fill}}"></div></div><span style="position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: #f2a93b; box-shadow: 0 0 0 2px rgba(255,255,255,0.85); transition: left 1s linear; {{ov2.knob}}"></span></div>
+</div>
+</div>
+</div>
+</div>
+<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; {{ov3.wrap}}">
+<div style="width: 520px; max-width: 100%; zoom: 0.68; display: flex; flex-direction: column">
+<div style="position: relative; width: 100%; height: 132px">
+<div style="position: absolute; left: 66px; right: 0; top: 22px; bottom: 22px; display: flex; flex-direction: column; justify-content: center; gap: 2px; box-sizing: border-box; padding: 0 16px 0 84px; border-radius: 14px; background: rgba(18,17,20,0.9); border: 1px solid rgba(255,255,255,0.07); text-align: left; min-width: 0">
+<div style="display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; font: 600 10px 'Saira Semi Condensed', sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: #f2a93b"><span style="width: 6px; height: 6px; border-radius: 50%; background: #f2a93b; opacity: 0.9;"></span><span style="flex: none">Now playing</span><span style="flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 500 11px 'IBM Plex Sans', 'Segoe UI', sans-serif; letter-spacing: 0; text-transform: none; color: #c8c3cc"><span style="margin-right: 7px">·</span>Request: !sr + song or 500 points</span></div>
+<div style="font: 700 23px/1.15 'Saira Semi Condensed', sans-serif; color: #f2efea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Crabapple Jam</div>
+<div style="font-size: 13px; color: #c8c3cc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Crabapple house band <span style="color: #8a8591">·</span> requested by <span style="color: #c9beff">@you</span></div>
+</div>
+<div style="position: absolute; left: 0; top: 0; width: 132px; height: 132px; z-index: 1">
+<svg viewBox="0 0 100 100" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg)"><circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="4"/><circle cx="50" cy="50" r="46" fill="none" stroke="#f2a93b" stroke-width="4" stroke-linecap="round" stroke-dasharray="{{ov3.dash}}" style="transition: stroke-dasharray 1s linear"/></svg>
+<div style="position: absolute; inset: 6%; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, transparent 0 44%, rgba(255,255,255,0.06) 45%, transparent 47%), repeating-radial-gradient(circle, #121214 0 2px, #1d1d21 2px 3px); box-shadow: 0 6px 18px rgba(0,0,0,0.5); {{ov3.spin}}">
+<img src="crabapple-crab.png" alt="" style="position: absolute; width: 45%; height: 45%; border-radius: 50%; object-fit: contain; background: #2b2119">
+<div style="position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #0b0b0d; box-shadow: 0 0 0 1px rgba(255,255,255,0.15)"></div>
+</div>
+<div style="position: absolute; inset: 0; transition: transform 1s linear; {{ov3.arm}}"><span style="position: absolute; left: 60px; top: -1px; width: 12px; height: 12px; border-radius: 50%; background: #f2a93b; box-shadow: 0 0 0 2px rgba(255,255,255,0.85)"></span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div style="margin-top: 16px; min-height: 64px">
+<div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 22px">{{styleName}}</div>
+<div style="margin-top: 4px; font-size: 15px; line-height: 1.45; color: rgba(246,236,238,0.78)">{{styleDesc}}</div>
+</div>
+</div>
+</div>
+
+<!-- SCENE 4: overlay extras -->
+<div style="position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 24px 48px; padding: 0 clamp(20px, 6vw, 96px); box-sizing: border-box; {{s4.wrap}}">
+<div style="flex: 1 1 360px; max-width: 520px; {{s4.text}}">
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: #ff8a97; margin-bottom: 16px">04 · Make it yours</div>
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 5.6vw, 72px); line-height: 1; letter-spacing: -0.03em; text-wrap: balance">Show as much as you want.</h2>
+<p style="margin: 20px 0 0; font-size: clamp(16px, 1.6vw, 20px); line-height: 1.5; color: rgba(246,236,238,0.78)">Each of these is a setting. Turn on the ones you want.</p>
+<div style="margin-top: 24px; display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{toggles}}" as="o">
+<div style="display: flex; align-items: center; gap: 14px; font-size: 16px">
+<div style="position: relative; width: 40px; height: 22px; flex: none; border-radius: 99px; {{o.track}}"><div style="position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #f6ecee; {{o.knob}}"></div></div>
+<span>{{o.label}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="flex: 1 1 320px; max-width: 520px; {{s4.vis}}">
+<div style="position: relative; width: 100%; aspect-ratio: 16 / 10; border-radius: 14px; background: #0d1a16; border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 30px 80px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px">
+<div style="position: absolute; left: 14px; top: 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(246,236,238,0.6)">Your stream</div>
+<div style="width: 520px; max-width: 100%; zoom: 0.8; display: flex; flex-direction: column; gap: 8px; font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif">
+<div style="display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 14px; padding: 12px; box-sizing: border-box; border-radius: 14px; border: 1px solid rgba(255,255,255,0.07); overflow: hidden; {{tintStyle}}">
+<div style="width: 76px; height: 76px; border-radius: 10px; background: #c1121f; display: flex; align-items: center; justify-content: center"><div style="width: 56%; height: 56%; border-radius: 50%; background: #0a0506"></div></div>
+<div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left">
+<div style="display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; font: 600 10px 'Saira Semi Condensed', sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: {{accentCol}}"><span style="width: 6px; height: 6px; border-radius: 50%; background: {{accentCol}}"></span><span style="flex: none">Now playing</span><span style="flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 500 11px 'IBM Plex Sans', 'Segoe UI', sans-serif; letter-spacing: 0; text-transform: none; color: #c8c3cc; {{hintStyle}}"><span style="margin-right: 7px">·</span>Request: !sr + song or 500 points</span></div>
+<div style="font: 700 23px/1.15 'Saira Semi Condensed', sans-serif; color: #f2efea">Blinding Lights</div>
+<div style="font-size: 13px; color: #c8c3cc">The Weeknd <span style="color: #8a8591">·</span> requested by <span style="color: #c9beff">@mika</span></div>
+<div style="height: 3px; margin-top: 7px"><div style="height: 100%; border-radius: 2px; background: rgba(255,255,255,0.1); overflow: hidden"><div style="height: 100%; width: 55%; border-radius: 2px; background: {{accentCol}}"></div></div></div>
+</div>
+</div>
+<div style="padding: 8px 12px 9px; box-sizing: border-box; border-radius: 12px; background: rgba(18,17,20,0.84); border: 1px solid rgba(255,255,255,0.07); {{nextStyle}}">
+<div style="font: 600 10px 'Saira Semi Condensed', sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: #8a8591; margin-bottom: 3px">Next up</div>
+<div style="display: flex; gap: 8px; font-size: 13px; line-height: 1.6; color: #f2efea"><span style="width: 12px; flex: none; text-align: right; color: #8a8591">1</span><span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Espresso <span style="color: #c8c3cc">Sabrina Carpenter</span></span><span style="flex: none; font-size: 12px; color: #c9beff">@dex</span></div>
+<div style="display: flex; gap: 8px; font-size: 13px; line-height: 1.6; color: #f2efea"><span style="width: 12px; flex: none; text-align: right; color: #8a8591">2</span><span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Redbone <span style="color: #c8c3cc">Childish Gambino</span></span><span style="flex: none; font-size: 12px; color: #c9beff">@juno</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- SCENE 5: CTA -->
+<div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 clamp(20px, 6vw, 96px); box-sizing: border-box; {{s5.wrap}}">
+<div style="{{s5.text}}">
+<img src="crabapple-crab.gif" alt="Crabapple's crab wearing headphones, next to an apple" style="display: block; height: clamp(90px, 20vh, 190px); width: auto; margin: 0 auto 12px">
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: #ff8a97; margin-bottom: 16px">Beta · v0.8.1</div>
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(44px, 8vw, 112px); line-height: 0.95; letter-spacing: -0.04em; text-wrap: balance">Ready when you go live.</h2>
+<p style="margin: 24px auto 0; font-size: clamp(16px, 1.8vw, 22px); line-height: 1.5; color: rgba(246,236,238,0.78); max-width: 520px">You don't need an Apple developer account. Install Crabapple, connect your Twitch chat, and viewers can start requesting.</p>
+<a href="https://github.com/kerdylives-beep/applecrap/releases" style="display: inline-block; margin-top: 36px; padding: 16px 32px; min-height: 44px; box-sizing: border-box; border-radius: 99px; background: #ff5468; color: #1a0a0e; font-weight: 500; font-size: 18px; text-decoration: none">Download the beta</a>
+</div>
+</div>
+
+<!-- SCENE 6: easter egg, the real overlay playing a request -->
+<div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 clamp(20px, 6vw, 96px) 48px; box-sizing: border-box; {{s6.wrap}}">
+<div style="width: min(100%, 540px); {{s6.text}}">
+<img src="crabapple-crab.gif" alt="Crabapple's crab wearing headphones, next to an apple" style="display: block; height: clamp(60px, 10vh, 96px); width: auto; margin: 0 auto 14px">
+<div style="text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: #ff8a97; {{eKick}}">Nobody scrolls this far.</div>
+<div style="margin-top: 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.7">
+<div style="{{eChat0}}"><span style="color: #7fd4ff">you</span><span style="color: rgba(246,236,238,0.5)">: </span>!sr crabapple jam</div>
+<div style="{{eChat1}}"><span style="color: #ff8a97">Crabapple</span><span style="color: rgba(246,236,238,0.5)">: </span>Queued "Crabapple Jam" by the house band.</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; margin-top: 18px; font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; {{eCard}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace">
+<span style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(246,236,238,0.65); margin-right: 4px">Overlay style</span>
+<sc-for list="{{styleButtons}}" as="b">
+<button type="button" onClick="{{b.pick}}" aria-pressed="{{b.on}}" style="min-height: 36px; padding: 6px 14px; border-radius: 99px; font: 500 12px 'JetBrains Mono', monospace; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; {{b.style}}">{{b.name}}</button>
+</sc-for>
+</div>
+<div style="display: flex; flex-direction: column; justify-content: center; gap: 8px; min-height: 320px">
+<sc-if value="{{isDefault}}">
+<div style="display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 14px; width: 100%; padding: 12px; box-sizing: border-box; border-radius: 14px; background: rgba(18,17,20,0.9); border: 1px solid rgba(255,255,255,0.07); overflow: hidden">
+<div style="width: 76px; height: 76px; border-radius: 10px; background: #2b2119; overflow: hidden"><img src="crabapple-crab.png" alt="" style="display: block; width: 100%; height: 100%; object-fit: contain"></div>
+<div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left">
+<div style="display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; font: 600 10px 'Saira Semi Condensed', sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: #f2a93b"><span style="width: 6px; height: 6px; border-radius: 50%; background: #f2a93b; {{pulseStyle}}"></span><span style="flex: none">{{labelText}}</span><span style="flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 500 11px 'IBM Plex Sans', 'Segoe UI', sans-serif; letter-spacing: 0; text-transform: none; color: #c8c3cc"><span style="margin-right: 7px">·</span>Request: !sr + song or 500 points</span></div>
+<div style="font: 700 23px/1.15 'Saira Semi Condensed', sans-serif; color: #f2efea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Crabapple Jam</div>
+<div style="font-size: 13px; color: #c8c3cc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Crabapple house band <span style="color: #8a8591">·</span> requested by <span style="color: #c9beff">@you</span></div>
+<div style="height: 3px; margin-top: 7px"><div style="height: 100%; border-radius: 2px; background: rgba(255,255,255,0.1); overflow: hidden"><div style="height: 100%; border-radius: 2px; background: #f2a93b; transition: width 1s linear; {{progStyle}}"></div></div></div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{isCompact}}">
+<div style="position: relative; width: min(100%, 400px); align-self: center; height: 40px; box-sizing: border-box; border-radius: 999px; background: rgba(18,17,20,0.9); border: 1px solid rgba(255,255,255,0.07); overflow: hidden">
+<div style="position: absolute; left: 0; top: 0; bottom: 0; background: color-mix(in srgb, #f2a93b 42%, rgba(18,17,20,0.9)); border-right: 2px solid #f2a93b; transition: width 1s linear; {{progStyle}}"></div>
+<div style="position: relative; display: flex; align-items: center; height: 100%; padding: 0 20px; white-space: nowrap; overflow: hidden"><span style="font: 700 17px 'Saira Semi Condensed', sans-serif; color: #f2efea">Crabapple Jam</span><span style="margin-left: 8px; font: 600 12px 'Saira Semi Condensed', sans-serif; letter-spacing: 0.12em; text-transform: uppercase; color: #c8c3cc">Crabapple house band</span></div>
+</div>
+</sc-if>
+<sc-if value="{{isCard}}">
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; width: 360px; max-width: 100%; align-self: center; box-sizing: border-box; padding: 20px; border-radius: 22px; background: rgba(10,10,12,0.55); border: 1px solid rgba(255,255,255,0.07); overflow: hidden; zoom: 0.6">
+<div style="position: absolute; inset: 0; background: radial-gradient(circle at 25% 15%, rgba(236,112,72,0.55), rgba(236,112,72,0) 65%), radial-gradient(circle at 85% 85%, rgba(242,169,59,0.3), rgba(242,169,59,0) 60%), #17110f"></div>
+<div style="position: relative; width: 100%; aspect-ratio: 1; border-radius: 14px; background: #2b2119; box-shadow: 0 12px 32px rgba(0,0,0,0.5); overflow: hidden"><img src="crabapple-crab.png" alt="" style="display: block; width: 100%; height: 100%; object-fit: contain"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 3px; min-width: 0; text-align: left">
+<div style="display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; font: 600 10px 'Saira Semi Condensed', sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: #f2a93b"><span style="width: 6px; height: 6px; border-radius: 50%; background: #f2a93b; {{pulseStyle}}"></span><span style="flex: none">{{labelText}}</span><span style="flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 500 11px 'IBM Plex Sans', 'Segoe UI', sans-serif; letter-spacing: 0; text-transform: none; color: #c8c3cc"><span style="margin-right: 7px">·</span>Request: !sr + song or 500 points</span></div>
+<div style="font: 700 28px/1.15 'Saira Semi Condensed', sans-serif; color: #f2efea">Crabapple Jam</div>
+<div style="font-size: 14px; color: #c8c3cc">Crabapple house band <span style="color: #8a8591">·</span> requested by <span style="color: #c9beff">@you</span></div>
+<div style="position: relative; height: 3px; margin-top: 14px"><div style="height: 100%; border-radius: 2px; background: rgba(255,255,255,0.18); overflow: hidden"><div style="height: 100%; border-radius: 2px; background: #f2a93b; transition: width 1s linear; {{progStyle}}"></div></div><span style="position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: #f2a93b; box-shadow: 0 0 0 2px rgba(255,255,255,0.85); transition: left 1s linear; {{knobStyle}}"></span></div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{isVinyl}}">
+<div style="position: relative; width: 100%; height: 132px">
+<div style="position: absolute; left: 66px; right: 0; top: 22px; bottom: 22px; display: flex; flex-direction: column; justify-content: center; gap: 2px; box-sizing: border-box; padding: 0 16px 0 84px; border-radius: 14px; background: rgba(18,17,20,0.9); border: 1px solid rgba(255,255,255,0.07); text-align: left; min-width: 0">
+<div style="display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; font: 600 10px 'Saira Semi Condensed', sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: #f2a93b"><span style="width: 6px; height: 6px; border-radius: 50%; background: #f2a93b; {{pulseStyle}}"></span><span style="flex: none">{{labelText}}</span><span style="flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 500 11px 'IBM Plex Sans', 'Segoe UI', sans-serif; letter-spacing: 0; text-transform: none; color: #c8c3cc"><span style="margin-right: 7px">·</span>Request: !sr + song or 500 points</span></div>
+<div style="font: 700 23px/1.15 'Saira Semi Condensed', sans-serif; color: #f2efea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Crabapple Jam</div>
+<div style="font-size: 13px; color: #c8c3cc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Crabapple house band <span style="color: #8a8591">·</span> requested by <span style="color: #c9beff">@you</span></div>
+</div>
+<div style="position: absolute; left: 0; top: 0; width: 132px; height: 132px; z-index: 1">
+<svg viewBox="0 0 100 100" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg)"><circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="4"/><circle cx="50" cy="50" r="46" fill="none" stroke="#f2a93b" stroke-width="4" stroke-linecap="round" stroke-dasharray="{{ringDash}}" style="transition: stroke-dasharray 1s linear"/></svg>
+<div style="position: absolute; inset: 6%; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, transparent 0 44%, rgba(255,255,255,0.06) 45%, transparent 47%), repeating-radial-gradient(circle, #121214 0 2px, #1d1d21 2px 3px); box-shadow: 0 6px 18px rgba(0,0,0,0.5); {{recordStyle}}">
+<img src="crabapple-crab.png" alt="" style="position: absolute; width: 45%; height: 45%; border-radius: 50%; object-fit: contain; background: #2b2119">
+<div style="position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #0b0b0d; box-shadow: 0 0 0 1px rgba(255,255,255,0.15)"></div>
+</div>
+<div style="position: absolute; inset: 0; transition: transform 1s linear; {{armStyle}}"><span style="position: absolute; left: 60px; top: -1px; width: 12px; height: 12px; border-radius: 50%; background: #f2a93b; box-shadow: 0 0 0 2px rgba(255,255,255,0.85)"></span></div>
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+<div style="margin-top: 22px; display: flex; align-items: center; gap: 16px; {{eCtl}}">
+<button type="button" onClick="{{togglePlay}}" aria-label="{{playLabel}}" style="flex: none; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%; background: #f2a93b; color: #1a0f05; cursor: pointer; display: flex; align-items: center; justify-content: center">
+<sc-if value="{{playing}}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg></sc-if>
+<sc-if value="{{notPlaying}}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></sc-if>
+</button>
+<label style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; color: rgba(246,236,238,0.85)">
+<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" style="flex: none"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path d="M16 9c1.5 1.2 1.5 4.8 0 6M18.5 6.5c3 2.6 3 8.4 0 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+<span>Volume</span>
+<input type="range" min="0" max="100" step="1" value="{{volPct}}" onInput="{{setVol}}" onChange="{{setVol}}" style="flex: 1; min-width: 0; min-height: 28px; accent-color: #f2a93b">
+<span style="width: 3ch; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 13px">{{volPct}}</span>
+</label>
+</div>
+<div style="margin-top: 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.5; color: rgba(246,236,238,0.65); {{eCtl}}">Press play. We wrote this tune ourselves.</div>
+</div>
+</div>
+
+<!-- progress rail + counter -->
+<div style="position: absolute; right: clamp(12px, 2vw, 28px); top: 50%; width: 3px; height: 140px; margin-top: -70px; background: rgba(246,236,238,0.2); border-radius: 99px; overflow: hidden"><div style="width: 100%; background: #ff5468; {{railStyle}}"></div></div>
+<div style="position: absolute; left: clamp(20px, 6vw, 96px); bottom: 24px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: rgba(246,236,238,0.7)">{{counter}} / 06 · Crabapple</div>
+
+</div>
+</div>
+</div>
+<script>
+// Minimal template runtime: {{path}} holes in text and attributes, <sc-for>, <sc-if>,
+// and onClick/onInput/onChange handlers. Written for this page, not a general library.
+class DCLogic {
+  constructor(props) { this.props = props || {}; }
+  setState(patch) {
+    Object.assign(this.state, patch);
+    if (window.__crabRender) window.__crabRender();
+  }
+}
+
+class Component extends DCLogic {
+  state = { p: 0, playing: false, vol: 0.6, pos: 0, ostyle: 0 };
+
+  // ---- the easter egg's tune: an original synth loop, 128 bpm, 32 bars (60 s) ----
+  _gainFor(v) { return v * v * 0.8; }
+
+  _toggle() {
+    if (this.state.playing) { this._pause(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!this._ac) {
+      const ac = new AC();
+      const comp = ac.createDynamicsCompressor();
+      const master = ac.createGain();
+      master.gain.value = this._gainFor(this.state.vol);
+      master.connect(comp);
+      comp.connect(ac.destination);
+      const noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+      const ch = noise.getChannelData(0);
+      for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+      this._ac = ac;
+      this._master = master;
+      this._noise = noise;
+      this._step = 0;
+      this._next = ac.currentTime + 0.06;
+    }
+    this._ac.resume();
+    this._timer = setInterval(() => this._tick(), 25);
+    this.setState({ playing: true });
+  }
+
+  _pause() {
+    clearInterval(this._timer);
+    this._timer = 0;
+    if (this._ac) this._ac.suspend();
+    this.setState({ playing: false });
+  }
+
+  _setVol(e) {
+    const raw = e && e.target ? Number(e.target.value) : 60;
+    const v = Math.min(1, Math.max(0, raw / 100));
+    this.setState({ vol: v });
+    if (this._master) this._master.gain.setTargetAtTime(this._gainFor(v), this._ac.currentTime, 0.02);
+  }
+
+  _tick() {
+    const ac = this._ac;
+    const spb = 60 / 128 / 4;
+    while (this._next < ac.currentTime + 0.12) {
+      this._playStep(this._step, this._next);
+      this._next += spb;
+      this._step++;
+      if (this._step % 4 === 0) this.setState({ pos: (this._step % 512) / 512 });
+    }
+  }
+
+  _playStep(step, t) {
+    const s = step % 16;
+    const bar = Math.floor(step / 16) % 4;
+    const roots = [55, 43.65, 65.41, 49];
+    const chords = [[440, 523.25, 659.25], [349.23, 440, 523.25], [523.25, 659.25, 783.99], [392, 493.88, 587.33]];
+    if (s % 4 === 0) this._kick(t);
+    if (s % 4 === 2) this._noiseHit(t, 0.05, 7000, 0.22);
+    if (s === 4 || s === 12) this._noiseHit(t, 0.16, 1800, 0.45);
+    if ([0, 3, 6, 8, 11, 14].includes(s)) this._tone('sawtooth', roots[bar] * (s === 8 ? 2 : 1), t, 0.2, 0.32, 420);
+    const pat = [0, null, 2, 1, null, 2, 1, null, 0, null, 2, 1, null, 2, 1, 2];
+    if (pat[s] !== null) this._tone('square', chords[bar][pat[s]], t, 0.11, 0.09, 2600);
+  }
+
+  _kick(t) {
+    const ac = this._ac;
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    g.gain.setValueAtTime(0.9, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+    o.connect(g);
+    g.connect(this._master);
+    o.start(t);
+    o.stop(t + 0.3);
+  }
+
+  _noiseHit(t, dur, hp, gain) {
+    const ac = this._ac;
+    const src = ac.createBufferSource();
+    const f = ac.createBiquadFilter();
+    const g = ac.createGain();
+    src.buffer = this._noise;
+    f.type = 'highpass';
+    f.frequency.value = hp;
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(f);
+    f.connect(g);
+    g.connect(this._master);
+    src.start(t);
+    src.stop(t + dur + 0.02);
+  }
+
+  _tone(type, freq, t, dur, gain, cutoff) {
+    const ac = this._ac;
+    const o = ac.createOscillator();
+    const f = ac.createBiquadFilter();
+    const g = ac.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    f.type = 'lowpass';
+    f.frequency.value = cutoff;
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(f);
+    f.connect(g);
+    g.connect(this._master);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+
+  componentDidMount() {
+    this._raf = 0;
+    this._onScroll = () => {
+      if (this._raf) return;
+      this._raf = requestAnimationFrame(() => {
+        this._raf = 0;
+        const vh = window.innerHeight;
+        const el = document.getElementById('crab-track');
+        let p;
+        if (el) {
+          const r = el.getBoundingClientRect();
+          p = -r.top / Math.max(1, r.height - vh);
+        } else {
+          const de = document.documentElement;
+          p = (window.scrollY || de.scrollTop) / Math.max(1, de.scrollHeight - vh);
+        }
+        p = Math.min(1, Math.max(0, p));
+        if (Math.abs(p - this.state.p) > 0.0005) this.setState({ p });
+      });
+    };
+    window.addEventListener('scroll', this._onScroll, true);
+    window.addEventListener('resize', this._onScroll);
+    this._onScroll();
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('scroll', this._onScroll, true);
+    window.removeEventListener('resize', this._onScroll);
+    if (this._raf) cancelAnimationFrame(this._raf);
+    clearInterval(this._timer);
+    if (this._ac) this._ac.close();
+  }
+
+  renderVals() {
+    const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+    const p = this.state.p;
+    const units = 8.0;
+    const t = p * units;
+    // scene ranges in scroll units: the overlay styles get the longest stretch, the easter egg is last
+    const ranges = [[0, 0.7], [0.7, 1.7], [1.7, 2.7], [2.7, 4.8], [4.8, 5.9], [5.9, 7.0], [7.0, 8.3]];
+
+    const scene = (i) => {
+      const [s, e] = ranges[i];
+      let d = 0;
+      if (t < s + 0.5) d = t - (s + 0.5);
+      else if (t > e - 0.5) d = t - (e - 0.5);
+      if (i === 0) d = Math.max(d, 0);
+      if (i === ranges.length - 1) d = Math.min(d, 0);
+      const a = Math.abs(d);
+      const op = clamp(1 - (a - 0.28) / 0.22);
+      return {
+        wrap: `opacity:${op.toFixed(3)};visibility:${op < 0.01 ? 'hidden' : 'visible'};pointer-events:${op > 0.6 ? 'auto' : 'none'};`,
+        text: `transform:translateY(${(-d * 70).toFixed(1)}px);`,
+        vis: `transform:translateY(${(d * 110).toFixed(1)}px) scale(${(1 - a * 0.1).toFixed(3)});`,
+      };
+    };
+    // local progress inside a scene, finished around the middle of its plateau
+    const local = (i) => clamp((t - ranges[i][0] + 0.2) / 0.7);
+
+    // background colour drifts between scenes
+    const cols = [[20,8,13],[11,18,32],[19,13,31],[13,26,22],[31,11,16],[20,8,13],[24,15,10]];
+    const mids = ranges.map(([s, e]) => (s + e) / 2);
+    let bi = 0;
+    while (bi < mids.length - 2 && t > mids[bi + 1]) bi++;
+    const bf = clamp((t - mids[bi]) / (mids[bi + 1] - mids[bi]));
+    const mix = cols[bi].map((c, k) => Math.round(c + (cols[bi + 1][k] - c) * bf));
+    const bg = `background:rgb(${mix.join(',')});`;
+
+    // scene 1: the mark lands, then rings spread out from it
+    const l1 = local(1);
+    const core = clamp(l1 * 3);
+    const coreStyle = `transform:scale(${(0.6 + core * 0.4).toFixed(3)});opacity:${core.toFixed(3)};`;
+    const rings = [0, 1, 2].map((k) => {
+      const g = clamp(l1 * 2.2 - 0.5 - k * 0.25);
+      return { style: `transform:scale(${(0.5 + g * 0.5).toFixed(3)});opacity:${((1 - g) * 0.55 * (g > 0 ? 1 : 0)).toFixed(3)};` };
+    });
+    const lab = clamp(l1 * 3 - 1);
+    const labelStyle = `opacity:${lab.toFixed(3)};transform:translateY(${((1 - lab) * 18).toFixed(1)}px);`;
+
+    // scene 2: two ways to request
+    const l2 = local(2);
+    const oa = clamp(l2 * 3);
+    const ob = clamp(l2 * 3 - 1);
+    const cardA = `opacity:${oa.toFixed(3)};transform:translateY(${((1 - oa) * 30).toFixed(1)}px);`;
+    const cardB = `opacity:${ob.toFixed(3)};transform:translateY(${((1 - ob) * 30).toFixed(1)}px);`;
+
+    // scene 3: cycle through the four overlay styles
+    const names = ['Default', 'Compact', 'Card', 'Vinyl'];
+    const descs = [
+      'Album art, title, artist and a progress bar.',
+      'A slim pill that is also the progress bar. Small enough for a corner.',
+      'Tall, for Starting Soon and BRB scenes. Resize it as much as you like and it stays centered and uncut.',
+      'A spinning record with the progress running around its edge.',
+    ];
+    const r = clamp((t - 3.05) / 1.4);
+    const idx = Math.min(3, Math.floor(r * 4));
+    const ov = (k) => {
+      const dd = r - (k + 0.5) / 4;
+      const op = clamp(1 - (Math.abs(dd) * 4 - 0.4) / 0.2);
+      const fill = clamp(0.15 + 0.75 * clamp(r * 4 - k + 0.2));
+      return {
+        wrap: `opacity:${op.toFixed(3)};visibility:${op < 0.01 ? 'hidden' : 'visible'};transform:translateY(${(-dd * 120).toFixed(1)}px) scale(${(1 - Math.abs(dd) * 0.25).toFixed(3)});`,
+        fill: `width:${(fill * 100).toFixed(1)}%;`,
+        knob: `left:${(fill * 100).toFixed(1)}%;`,
+        dash: `${(fill * 289.03).toFixed(1)} 289.03`,
+        arm: `transform:rotate(${(fill * 360).toFixed(1)}deg);`,
+        spin: `transform:rotate(${(t * 420).toFixed(1)}deg);`,
+      };
+    };
+    const styleChips = names.map((name, k) => ({
+      name,
+      style: k === idx
+        ? 'background:#ff5468;color:#1a0a0e;border:1px solid #ff5468;'
+        : 'background:transparent;color:rgba(246,236,238,0.75);border:1px solid rgba(246,236,238,0.3);',
+    }));
+
+    // scene 4: optional extras switch on one by one
+    const l4 = local(4);
+    const labels = ['Up next list', 'How to request', 'Colors from the album art', 'Pop up when a song starts, then hide'];
+    // the up next list is already on when the scene opens; the others switch on as you scroll
+    const av = labels.map((_, k) => (k === 0 ? 1 : clamp(l4 * 3.4 - (k - 1))));
+    const toggles = labels.map((label, k) => ({
+      label,
+      track: `background:${av[k] > 0.5 ? '#ff5468' : 'rgba(246,236,238,0.25)'};`,
+      knob: `transform:translateX(${(av[k] * 18).toFixed(1)}px);`,
+    }));
+    // colors taken from a red album cover: card, outline and bar shift from neutral to the cover's reds
+    const tintMix = [18, 17, 20].map((c, k) => Math.round(c + ([62, 10, 14][k] - c) * av[2]));
+    const tintStyle = `background:rgba(${tintMix.join(',')},0.92);`;
+    const accMix = [242, 169, 59].map((c, k) => Math.round(c + ([227, 52, 47][k] - c) * av[2]));
+    const accentCol = `rgb(${accMix.join(',')})`;
+    const nextStyle = `opacity:${av[0].toFixed(3)};transform:translateY(${((1 - av[0]) * 16).toFixed(1)}px);`;
+    const hintStyle = `opacity:${av[1].toFixed(3)};transform:translateY(${((1 - av[1]) * 12).toFixed(1)}px);`;
+
+    // easter egg: lines, overlay card and controls arrive one after another
+    const eg = (a, b) => clamp((t - a) / (b - a));
+    const eggStyle = (v) => `opacity:${v.toFixed(3)};transform:translateY(${((1 - v) * 12).toFixed(1)}px);`;
+    const eKick = eggStyle(eg(7.0, 7.2));
+    const eChat0 = eggStyle(eg(7.15, 7.35));
+    const eChat1 = eggStyle(eg(7.3, 7.55));
+    const eCard = eggStyle(eg(7.5, 7.8));
+    const eCtl = eggStyle(eg(7.7, 7.95));
+    const playing = this.state.playing;
+    const volPct = String(Math.round(this.state.vol * 100));
+
+    // chapter counter follows the scenes, not the scroll units
+    let sceneNo = 1;
+    ranges.forEach(([s], k) => { if (t >= s) sceneNo = Math.min(6, k + 1); });
+
+    // eye candy: drifting glow orbs, scroll-driven outline marquee, twinkling sparks, equalizer floor
+    const orbDefs = [['#ff5468', 46, 0], ['#7a5cff', 40, 2.1], ['#18c9a0', 34, 4.2]];
+    const orbs = orbDefs.map(([c, size, ph]) => ({
+      style: `width:${size}vw;height:${size}vw;background:radial-gradient(closest-side, ${c}66, ${c}00);transform:translate(${(50 + 45 * Math.sin(p * 6 + ph)).toFixed(1)}vw, ${(45 + 40 * Math.cos(p * 5 + ph * 1.3)).toFixed(1)}vh) translate(-50%, -50%);`,
+    }));
+    const ghostStyle = `transform:translateY(${(Math.sin(t * Math.PI * 2) * 0).toFixed(0)}px) rotate(${(Math.sin(p * 8) * 3).toFixed(2)}deg);`;
+    const sparks = [];
+    for (let k = 0; k < 28; k++) {
+      const sx = (k * 37.7) % 100;
+      const sy = (k * 61.3) % 100;
+      const sp = 0.4 + (k % 5) * 0.35;
+      const y = (((sy - p * 90 * sp) % 100) + 100) % 100;
+      const size = 2 + (k % 4);
+      const tw = 0.25 + 0.55 * Math.abs(Math.sin(t * 3 + k));
+      sparks.push({ style: `left:${sx.toFixed(1)}%;top:${y.toFixed(1)}%;width:${size}px;height:${size}px;opacity:${tw.toFixed(2)};` });
+    }
+    const floorBars = [];
+    for (let k = 0; k < 48; k++) {
+      const h = 6 + 74 * Math.pow(Math.abs(Math.sin(t * 5 + k * 0.45) * Math.cos(t * 2.3 + k * 0.17)), 1.4);
+      floorBars.push({ style: `height:${h.toFixed(1)}px;opacity:0.22;` });
+    }
+
+    return {
+      orbs, ghostStyle, sparks, floorBars,
+      bg,
+      vinyl: `transform:rotate(${(p * 900).toFixed(1)}deg);`,
+      s0: scene(0), s1: scene(1), s2: scene(2), s3: scene(3), s4: scene(4), s5: scene(5),
+      coreStyle, rings, labelStyle, cardA, cardB,
+      ov0: ov(0), ov1: ov(1), ov2: ov(2), ov3: ov(3),
+      styleChips, styleName: names[idx], styleDesc: descs[idx],
+      s6: scene(6),
+      eKick, eChat0, eChat1, eCard, eCtl,
+      playing, notPlaying: !playing, volPct,
+      playLabel: playing ? 'Pause' : 'Play Crabapple Jam',
+      labelText: playing ? 'Now playing' : 'Paused',
+      pulseStyle: playing ? 'animation:crab-pulse 2s ease-in-out infinite;' : 'opacity:0.5;',
+      progStyle: `width:${(this.state.pos * 100).toFixed(1)}%;`,
+      isDefault: this.state.ostyle === 0, isCompact: this.state.ostyle === 1, isCard: this.state.ostyle === 2, isVinyl: this.state.ostyle === 3,
+      styleButtons: ['Default', 'Compact', 'Card', 'Vinyl'].map((name, k) => ({
+        name,
+        on: this.state.ostyle === k,
+        pick: () => this.setState({ ostyle: k }),
+        style: this.state.ostyle === k
+          ? 'background:#f2a93b;color:#1a0f05;border:1px solid #f2a93b;'
+          : 'background:transparent;color:rgba(246,236,238,0.8);border:1px solid rgba(246,236,238,0.35);',
+      })),
+      knobStyle: `left:${(this.state.pos * 100).toFixed(1)}%;`,
+      ringDash: `${(this.state.pos * 289.03).toFixed(1)} 289.03`,
+      armStyle: `transform:rotate(${(this.state.pos * 360).toFixed(1)}deg);`,
+      recordStyle: `animation:crab-spin 5s linear infinite;animation-play-state:${playing ? 'running' : 'paused'};`,
+      togglePlay: () => this._toggle(),
+      setVol: (e) => this._setVol(e),
+      toggles, tintStyle, accentCol, nextStyle, hintStyle,
+      railStyle: `height:${(p * 100).toFixed(1)}%;`,
+      counter: String(sceneNo).padStart(2, '0'),
+    };
+  }
+}
+
+(function () {
+  var HOLE = /\{\{\s*([^}]+?)\s*\}\}/g;
+  var WHOLE = /^\s*\{\{\s*([^}]+?)\s*\}\}\s*$/;
+
+  function get(path, scope) {
+    path = path.trim();
+    if (path === 'true') return true;
+    if (path === 'false') return false;
+    var v = scope;
+    var keys = path.split('.');
+    for (var i = 0; i < keys.length; i++) {
+      if (v == null) return undefined;
+      v = v[keys[i]];
+    }
+    return v;
+  }
+
+  function interp(text, scope) {
+    return text.replace(HOLE, function (m, p) {
+      var v = get(p, scope);
+      return v == null ? '' : String(v);
+    });
+  }
+
+  function compile(node) {
+    var ups = [];
+    if (node.nodeType === 3) {
+      var text = node.nodeValue;
+      if (text.indexOf('{{') !== -1) {
+        ups.push(function (s) {
+          var v = interp(text, s);
+          if (node.nodeValue !== v) node.nodeValue = v;
+        });
+      }
+      return ups;
+    }
+    if (node.nodeType !== 1) return ups;
+    var tag = node.localName;
+
+    if (tag === 'sc-for') {
+      var listPath = node.getAttribute('list').match(WHOLE)[1];
+      var as = node.getAttribute('as');
+      var tpl = Array.prototype.slice.call(node.childNodes);
+      tpl.forEach(function (n) { n.remove(); });
+      var rows = [];
+      ups.push(function (s) {
+        var list = get(listPath, s) || [];
+        while (rows.length < list.length) {
+          var nodes = tpl.map(function (n) { return n.cloneNode(true); });
+          nodes.forEach(function (n) { node.appendChild(n); });
+          var rowUps = [];
+          nodes.forEach(function (n) { rowUps = rowUps.concat(compile(n)); });
+          rows.push(rowUps);
+        }
+        list.forEach(function (item, i) {
+          var sc = Object.assign({}, s);
+          sc[as] = item;
+          sc.$index = i;
+          rows[i].forEach(function (u) { u(sc); });
+        });
+      });
+      return ups;
+    }
+
+    if (tag === 'sc-if') {
+      var condPath = node.getAttribute('value').match(WHOLE)[1];
+      ups.push(function (s) { node.style.display = get(condPath, s) ? 'contents' : 'none'; });
+      Array.prototype.slice.call(node.childNodes).forEach(function (c) { ups = ups.concat(compile(c)); });
+      return ups;
+    }
+
+    var current = null;
+    var bound = [];
+    var hasHandler = false;
+    Array.prototype.slice.call(node.attributes).forEach(function (a) {
+      if (a.value.indexOf('{{') === -1) return;
+      if (/^on/.test(a.name)) {
+        var path = a.value.match(WHOLE)[1];
+        node.removeAttribute(a.name);
+        node.addEventListener(a.name.slice(2), function (e) {
+          var fn = get(path, current);
+          if (typeof fn === 'function') fn(e);
+        });
+        hasHandler = true;
+        return;
+      }
+      bound.push([a.name, a.value]);
+    });
+    if (bound.length || hasHandler) {
+      ups.push(function (s) {
+        current = s;
+        bound.forEach(function (b) {
+          var v = interp(b[1], s);
+          if (node.getAttribute(b[0]) !== v) node.setAttribute(b[0], v);
+          if (b[0] === 'value' && node.value !== v) node.value = v;
+        });
+      });
+    }
+    Array.prototype.slice.call(node.childNodes).forEach(function (c) { ups = ups.concat(compile(c)); });
+    return ups;
+  }
+
+  var app = document.getElementById('app');
+  var ups = compile(app);
+  var logic = new Component();
+  var pending = false;
+  function update() {
+    var vals = logic.renderVals();
+    ups.forEach(function (u) { u(vals); });
+  }
+  window.__crabRender = function () {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(function () { pending = false; update(); });
+  };
+  update();
+  logic.componentDidMount();
+})();
+</script>
+</body>
+</html>
