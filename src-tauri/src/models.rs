@@ -283,7 +283,8 @@ pub struct OverlayState {
     pub duration_ms: Option<i64>,
     pub show_queue: bool,
     pub queue: Vec<OverlayQueueItem>,
-    /// "Request a song: !sr + name, or 500 points", when turned on.
+    /// "Request: !sr + song or 500 points", when turned on. Shown beside
+    /// "Now playing" (left out of the Compact style).
     pub hint: Option<String>,
     pub art_colors: bool,
     pub show_while_paused: bool,

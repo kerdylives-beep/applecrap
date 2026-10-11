@@ -145,10 +145,33 @@
     display: flex;
     align-items: center;
     gap: 7px;
+    min-width: 0;
     font: 600 10px 'Saira Semi Condensed', sans-serif;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--accent);
+    white-space: nowrap;
+  }
+
+  .label > .pulse,
+  #label-text { flex: none; }
+
+  /* How to request, on the same line as "Now playing". */
+  .label-hint {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font: 500 11px 'IBM Plex Sans', 'Segoe UI', sans-serif;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--muted);
+  }
+
+  .label-hint::before {
+    content: '·';
+    margin-right: 7px;
+    color: var(--muted);
   }
 
   .pulse {
@@ -494,20 +517,6 @@
     font-size: 12px;
   }
 
-  .hint {
-    align-self: flex-start;
-    max-width: var(--width);
-    padding: 4px 11px;
-    border-radius: 999px;
-    background: var(--chip);
-    border: 1px solid var(--line);
-    font-size: 12px;
-    color: var(--twitch);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
   /* A new song slides in. */
   .bump { animation: bump 520ms ease; }
 
@@ -545,7 +554,7 @@
           <div class="ring-arm" id="ring-arm"><span class="knob"></span></div>
         </div>
         <div class="meta">
-          <div class="label"><span class="pulse"></span><span id="label-text">Now playing</span></div>
+          <div class="label"><span class="pulse"></span><span id="label-text">Now playing</span><span class="label-hint" id="hint" hidden></span></div>
           <div class="marquee title" id="title"><span></span></div>
           <div class="marquee sub" id="sub"><span></span></div>
           <div class="progress" id="progress" hidden>
@@ -558,7 +567,6 @@
         <div class="next-label">Next up</div>
         <div id="next-items"></div>
       </div>
-      <div class="hint" id="hint" hidden></div>
     </div>
   </div>
   <div class="preview-note">Preview — in OBS this sits on top of your scene.</div>

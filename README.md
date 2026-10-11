@@ -100,9 +100,10 @@ AppleCrap serves a now-playing overlay for OBS on your own machine.
 Use as many as you like across your scenes; each source only draws its own style. Ticking
 "Shutdown source when not visible" in OBS keeps a style idle until its scene is live.
 
-Each shows the current song, who requested it (except Compact) and how far through it is, what is
-queued up next, and how viewers can request (the chat command, plus the Channel Points cost when
-that's on). They keep a fixed size no matter the song: long titles drift across instead.
+Each shows the current song, who requested it and how far through it is, and what is queued up
+next. Right beside "Now playing" it shows how viewers can request: the chat command, plus the
+Channel Points cost when that's on. Compact leaves out the requester and the request line to stay
+slim. They keep a fixed size no matter the song: long titles drift across instead.
 
 By default its colors follow each song's album art. It can also pop up for a few seconds when a song
 starts instead of staying on screen, hide while paused, drop the "next up" list or the request line,

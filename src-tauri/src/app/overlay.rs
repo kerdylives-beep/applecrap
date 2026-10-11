@@ -230,9 +230,9 @@ fn request_hint(settings: &crate::models::AppSettings, points_live: bool) -> Str
     let command = settings.twitch.request_command.trim();
     let cost = settings.channel_points.cost;
     match (points_live, settings.channel_points.points_only) {
-        (true, true) => format!("Request a song: {cost} channel points"),
-        (true, false) => format!("Request a song: {command} + name, or {cost} points"),
-        _ => format!("Request a song: {command} + name"),
+        (true, true) => format!("Request: {cost} points"),
+        (true, false) => format!("Request: {command} + song or {cost} points"),
+        _ => format!("Request: {command} + song"),
     }
 }
 
@@ -267,11 +267,11 @@ mod tests {
         let mut settings = crate::models::AppSettings::default();
         settings.twitch.request_command = "!sr".into();
         settings.channel_points.cost = 500;
-        assert_eq!(request_hint(&settings, false), "Request a song: !sr + name");
-        assert_eq!(request_hint(&settings, true), "Request a song: !sr + name, or 500 points");
+        assert_eq!(request_hint(&settings, false), "Request: !sr + song");
+        assert_eq!(request_hint(&settings, true), "Request: !sr + song or 500 points");
         settings.channel_points.points_only = true;
-        assert_eq!(request_hint(&settings, true), "Request a song: 500 channel points");
+        assert_eq!(request_hint(&settings, true), "Request: 500 points");
         // Points-only only applies while the reward is actually live.
-        assert_eq!(request_hint(&settings, false), "Request a song: !sr + name");
+        assert_eq!(request_hint(&settings, false), "Request: !sr + song");
     }
 }
