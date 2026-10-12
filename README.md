@@ -74,6 +74,9 @@ Portable storage uses `./data` beside the executable. If that folder is not writ
 
 Your keyboard's **media keys** (play/pause, next, previous) control the player while it has a track loaded — no need to focus the app first. When AppleCrap is not holding a track, the keys go back to your other apps, so they only take over the keys while they are actually the thing playing. You can turn this off in **Setup**. The current track also shows in the Windows "now playing" popup.
 
+To browse Apple Music in the player window, use the **Back** and **Forward** buttons in its top-right
+corner, **Alt+Left/Right Arrow**, or your mouse's side buttons. Moving around never stops the music.
+
 The player window can stay hidden the whole time; while hidden it stops drawing entirely, so it costs almost nothing to leave running beside a game.
 
 **Audio quality:** playback runs at 256 kbps AAC, the highest the Apple Music web player offers, and

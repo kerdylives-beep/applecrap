@@ -69,7 +69,10 @@ pub fn run() {
                 .title("AppleCrap Player — Apple Music")
                 .inner_size(1150.0, 820.0)
                 .visible(false)
-                .initialization_script(include_str!("scripts/player-bridge.js"));
+                .initialization_script(include_str!("scripts/player-bridge.js"))
+                // Back/Forward buttons and shortcuts: the window has no
+                // browser toolbar.
+                .initialization_script(include_str!("scripts/player-nav.js"));
 
                 // wry builds a separate WebView2 environment per webview, and
                 // WebView2 refuses to create a second environment for the same
