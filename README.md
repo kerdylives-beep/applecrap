@@ -8,6 +8,7 @@ AppleCrap is a portable Windows app for taking song requests from Twitch chat an
 
 - ⬇️ [Download AppleCrap for Windows](https://github.com/kerdylives-beep/applecrap/releases/latest/download/AppleCrap.zip)
 - 📦 [All releases and what changed](https://github.com/kerdylives-beep/applecrap/releases)
+- 🌐 [The website](https://kerdylives-beep.github.io/applecrap/) - a scroll-through tour of what it does
 - 🪟 Unzip it and run `AppleCrap.exe`. Your settings live in the `data` folder next to it.
 
 **"Windows protected your PC"?** The first time you run it, Windows may show this because the app
@@ -252,6 +253,7 @@ other states).
 - `src/` - React app: `components/` for the screens, `useAppStore.ts` for client state, `tauri.ts` for the typed bridge to the backend
 - `src-tauri/` - Rust app shell, persistence, Twitch chat, sign-in and Channel Points, Apple Music lookup, the embedded player bridge, and diagnostics
 - `scripts/` - icon and portable packaging helpers
+- `site/` - the website: one static page, published with GitHub Pages when it changes on `main` (see `site/README.md`)
 
 ## Status
 
