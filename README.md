@@ -50,7 +50,7 @@ Give it a wider window and the activity feed joins in:
 
 The embedded Apple Music player — sign in once, then it can stay hidden all stream while requests queue into it:
 
-<img src="img/screenshots/player.png" width="720" alt="The embedded Apple Music player window, signed in and showing Browse, with Back and Forward beside the Apple Music logo">
+<img src="img/screenshots/player.png" width="720" alt="The embedded Apple Music player window, signed in and showing Browse, with Back and Forward just outside the sidebar">
 
 ## Requirements
 
@@ -75,8 +75,8 @@ Portable storage uses `./data` beside the executable. If that folder is not writ
 
 Your keyboard's **media keys** (play/pause, next, previous) control the player while it has a track loaded — no need to focus the app first. When AppleCrap is not holding a track, the keys go back to your other apps, so they only take over the keys while they are actually the thing playing. You can turn this off in **Setup**. The current track also shows in the Windows "now playing" popup.
 
-To browse Apple Music in the player window, use the **Back** and **Forward** buttons beside the Apple Music
-logo, **Alt+Left/Right Arrow**, or your mouse's side buttons. Moving around never stops the music.
+To browse Apple Music in the player window, use the **Back** and **Forward** buttons at the top, just outside
+the sidebar, **Alt+Left/Right Arrow**, or your mouse's side buttons. Moving around never stops the music.
 
 The player window can stay hidden the whole time; while hidden it stops drawing entirely, so it costs almost nothing to leave running beside a game.
 

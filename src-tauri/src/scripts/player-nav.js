@@ -1,6 +1,6 @@
 // Back and Forward for the embedded Apple Music player window, which has no
-// browser toolbar. A small pill in the sidebar's top row, beside the Apple
-// Music logo, plus the usual shortcuts (Alt+Left / Alt+Right) and the mouse's
+// browser toolbar. A slim pill just outside the sidebar, in the strip above
+// the page, plus the usual shortcuts (Alt+Left / Alt+Right) and the mouse's
 // side buttons. The top-right corner looked free but isn't: playlist pages put
 // their share and menu buttons there, and Search puts its tabs there.
 //
@@ -84,7 +84,7 @@
           z-index: 2147483647;
           display: flex;
           gap: 2px;
-          padding: 3px;
+          padding: 2px;
           border-radius: 999px;
           background: rgba(40, 40, 42, 0.72);
           border: 1px solid rgba(255, 255, 255, 0.1);
@@ -97,8 +97,8 @@
           position: relative;
           display: grid;
           place-items: center;
-          width: 30px;
-          height: 30px;
+          width: 26px;
+          height: 26px;
           padding: 0;
           border: 0;
           border-radius: 999px;
@@ -184,13 +184,15 @@
     place()
     window.addEventListener('resize', place)
     if (nav) nav.addEventListener('currententrychange', () => setTimeout(place, 50))
-    // Apple's app can rebuild its sidebar; a cheap check keeps the pill on it.
+    // Apple's app can rebuild its sidebar; a cheap check keeps the pill beside it.
     setInterval(place, 2000)
   }
 
   // Where the pill goes, following Apple's own layout:
-  // - a normal window has a sidebar: its top row, right-aligned, level with
-  //   the logo;
+  // - a normal window has a sidebar: just outside it, in the strip above the
+  //   page. Page titles ("New", "Radio") start 32px down and 40px in, and
+  //   playlist artwork and Search's box sit lower, so a 30px pill 6px from
+  //   the top clears them all;
   // - a narrow window folds the sidebar into a top bar (menu button left,
   //   logo middle, Sign In or the account on the right): just after the menu
   //   button.
@@ -199,12 +201,9 @@
     if (!sidebar) return null
     const bar = sidebar.getBoundingClientRect()
     if (bar.width === 0 || bar.height === 0) return null
-    const logo = sidebar.querySelector('.logo a') || sidebar.querySelector('.logo')
-    const logoBox = logo && logo.getBoundingClientRect()
 
-    if (bar.height > 120 && logoBox && logoBox.height > 0) {
-      const left = Math.max(logoBox.right + 12, bar.right - 14 - width)
-      return { left, top: logoBox.top + logoBox.height / 2 - height / 2 }
+    if (bar.height > 120) {
+      return { left: bar.right + 14, top: 6 }
     }
     const menu = sidebar.querySelector('button.menuicon')
     const menuBox = menu && menu.getBoundingClientRect()
