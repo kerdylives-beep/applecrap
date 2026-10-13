@@ -22,7 +22,7 @@ sc-for, sc-if { display: contents; }
 <body>
 <noscript><p style="font-family: system-ui, sans-serif; padding: 24px; color: #f6ecee">Crabapple's page needs JavaScript. The beta is on the <a href="https://github.com/kerdylives-beep/applecrap/releases">releases page</a>.</p></noscript>
 <div id="app">
-<div id="crab-track" style="position: relative; height: 870vh; width: 100%; font-family: 'DM Sans', system-ui, sans-serif; color: #f6ecee">
+<div id="crab-track" style="position: relative; height: 980vh; width: 100%; font-family: 'DM Sans', system-ui, sans-serif; color: #f6ecee">
 <div style="position: sticky; top: 0; height: 100vh; width: 100%; overflow: hidden; {{bg}}">
 
 <!-- ambient layers -->
@@ -41,7 +41,7 @@ sc-for, sc-if { display: contents; }
 
 <!-- SCENE 0: hero -->
 <div style="position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 24px 48px; padding: 0 clamp(20px, 6vw, 96px); box-sizing: border-box; {{s0.wrap}}">
-<div style="flex: 1 1 360px; max-width: 680px; {{s0.text}}">
+<div style="flex: 1 1 360px; max-width: 900px; {{s0.text}}">
 <div style="font-family: 'JetBrains Mono', monospace; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: #ff8a97; margin-bottom: 16px">Song requests for Apple Music streamers</div>
 <h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(56px, 11vw, 168px); line-height: 0.9; letter-spacing: -0.04em">Crabapple</h1>
 <p style="margin: 24px 0 0; font-size: clamp(18px, 2vw, 24px); line-height: 1.45; color: rgba(246,236,238,0.78); max-width: 460px">The only song request app that plays Apple Music for your chat.</p>
@@ -186,27 +186,31 @@ sc-for, sc-if { display: contents; }
 <div style="flex: 1 1 360px; max-width: 520px; {{s4.text}}">
 <div style="font-family: 'JetBrains Mono', monospace; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: #ff8a97; margin-bottom: 16px">04 · Make it yours</div>
 <h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 5.6vw, 72px); line-height: 1; letter-spacing: -0.03em; text-wrap: balance">Show as much as you want.</h2>
-<p style="margin: 20px 0 0; font-size: clamp(16px, 1.6vw, 20px); line-height: 1.5; color: rgba(246,236,238,0.78)">Each of these is a setting. Turn on the ones you want.</p>
-<div style="margin-top: 24px; display: flex; flex-direction: column; gap: 10px">
+<p style="margin: 20px 0 0; font-size: clamp(16px, 1.6vw, 20px); line-height: 1.5; color: rgba(246,236,238,0.78)">Scroll to watch each one switch on. Then click the switches yourself.</p>
+<div style="margin-top: 24px; display: flex; flex-direction: column; gap: 2px">
 <sc-for list="{{toggles}}" as="o">
-<div style="display: flex; align-items: center; gap: 14px; font-size: 16px">
-<div style="position: relative; width: 40px; height: 22px; flex: none; border-radius: 99px; {{o.track}}"><div style="position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #f6ecee; {{o.knob}}"></div></div>
+<button type="button" role="switch" aria-checked="{{o.on}}" onClick="{{o.toggle}}" style="display: flex; align-items: center; gap: 14px; width: 100%; min-height: 44px; padding: 4px 0; border: 0; background: none; color: inherit; font: inherit; font-size: 16px; text-align: left; cursor: pointer">
+<span style="position: relative; display: block; width: 40px; height: 22px; flex: none; border-radius: 99px; {{o.track}}"><span style="position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #f6ecee; {{o.knob}}"></span></span>
 <span>{{o.label}}</span>
-</div>
+</button>
 </sc-for>
+</div>
+<div style="margin-top: 22px; display: inline-flex; align-items: center; gap: 10px; transform-origin: left center; will-change: transform; {{tryStyle}}">
+<svg viewBox="0 0 48 32" width="48" height="32" aria-hidden="true"><path d="M44 28C30 28 14 22 8 6M8 6l-1 11M8 6l11 3" fill="none" stroke="#ffd479" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(26px, 2.6vw, 38px); letter-spacing: -0.02em; color: #ffd479">Seriously, try it!</span>
 </div>
 </div>
 <div style="flex: 1 1 320px; max-width: 520px; {{s4.vis}}">
 <div style="position: relative; width: 100%; aspect-ratio: 16 / 10; border-radius: 14px; background: #0d1a16; border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 30px 80px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px">
 <div style="position: absolute; left: 14px; top: 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(246,236,238,0.6)">Your stream</div>
-<div style="width: 520px; max-width: 100%; zoom: 0.8; display: flex; flex-direction: column; gap: 8px; font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif">
-<div style="display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 14px; padding: 12px; box-sizing: border-box; border-radius: 14px; border: 1px solid rgba(255,255,255,0.07); overflow: hidden; {{tintStyle}}">
+<div style="width: 520px; max-width: 100%; zoom: 0.8; display: flex; flex-direction: column; gap: 8px; font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; {{popStyle}}">
+<div style="display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 14px; padding: 12px; box-sizing: border-box; border-radius: 14px; border: 1px solid rgba(255,255,255,0.07); overflow: hidden; transition: background-color 0.3s ease; {{tintStyle}}">
 <div style="width: 76px; height: 76px; border-radius: 10px; background: #c1121f; display: flex; align-items: center; justify-content: center"><div style="width: 56%; height: 56%; border-radius: 50%; background: #0a0506"></div></div>
 <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left">
-<div style="display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; font: 600 10px 'Saira Semi Condensed', sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: {{accentCol}}"><span style="width: 6px; height: 6px; border-radius: 50%; background: {{accentCol}}"></span><span style="flex: none">Now playing</span><span style="flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 500 11px 'IBM Plex Sans', 'Segoe UI', sans-serif; letter-spacing: 0; text-transform: none; color: #c8c3cc; {{hintStyle}}"><span style="margin-right: 7px">·</span>Request: !sr + song or 500 points</span></div>
+<div style="display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; font: 600 10px 'Saira Semi Condensed', sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: {{accentCol}}; transition: color 0.3s ease"><span style="width: 6px; height: 6px; border-radius: 50%; background: {{accentCol}}; transition: background-color 0.3s ease"></span><span style="flex: none">Now playing</span><span style="flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 500 11px 'IBM Plex Sans', 'Segoe UI', sans-serif; letter-spacing: 0; text-transform: none; color: #c8c3cc; {{hintStyle}}"><span style="margin-right: 7px">·</span>Request: !sr + song or 500 points</span></div>
 <div style="font: 700 23px/1.15 'Saira Semi Condensed', sans-serif; color: #f2efea">Blinding Lights</div>
 <div style="font-size: 13px; color: #c8c3cc">The Weeknd <span style="color: #8a8591">·</span> requested by <span style="color: #c9beff">@mika</span></div>
-<div style="height: 3px; margin-top: 7px"><div style="height: 100%; border-radius: 2px; background: rgba(255,255,255,0.1); overflow: hidden"><div style="height: 100%; width: 55%; border-radius: 2px; background: {{accentCol}}"></div></div></div>
+<div style="height: 3px; margin-top: 7px"><div style="height: 100%; border-radius: 2px; background: rgba(255,255,255,0.1); overflow: hidden"><div style="height: 100%; width: 55%; border-radius: 2px; background: {{accentCol}}; transition: background-color 0.3s ease"></div></div></div>
 </div>
 </div>
 <div style="padding: 8px 12px 9px; box-sizing: border-box; border-radius: 12px; background: rgba(18,17,20,0.84); border: 1px solid rgba(255,255,255,0.07); {{nextStyle}}">
@@ -330,7 +334,7 @@ class DCLogic {
 }
 
 class Component extends DCLogic {
-  state = { p: 0, playing: false, vol: 0.6, pos: 0, ostyle: 0 };
+  state = { p: 0, playing: false, vol: 0.6, pos: 0, ostyle: 0, manual: null, tick: 0 };
 
   // ---- the easter egg's tune: an original synth loop, 128 bpm, 32 bars (60 s) ----
   _gainFor(v) { return v * v * 0.8; }
@@ -466,8 +470,11 @@ class Component extends DCLogic {
         }
         p = Math.min(1, Math.max(0, p));
         if (Math.abs(p - this.state.p) > 0.0005) this.setState({ p });
+        // scrolling back above the extras scene hands the switches back to the scroll
+        if (this.state.manual && p * 11.0 < 4.9) this.setState({ manual: null });
       });
     };
+    this._popTimer = setInterval(() => { if (this._popOn) this.setState({ tick: Date.now() }); }, 400);
     window.addEventListener('scroll', this._onScroll, true);
     window.addEventListener('resize', this._onScroll);
     this._onScroll();
@@ -478,16 +485,17 @@ class Component extends DCLogic {
     window.removeEventListener('resize', this._onScroll);
     if (this._raf) cancelAnimationFrame(this._raf);
     clearInterval(this._timer);
+    clearInterval(this._popTimer);
     if (this._ac) this._ac.close();
   }
 
   renderVals() {
     const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
     const p = this.state.p;
-    const units = 9.6;
+    const units = 11.0;
     const t = p * units;
     // scene ranges in scroll units: the overlay styles get the longest stretch, the easter egg is last
-    const ranges = [[0, 0.7], [0.7, 1.7], [1.7, 2.7], [2.7, 4.8], [4.8, 5.9], [5.9, 8.4], [8.4, 9.7]];
+    const ranges = [[0, 0.7], [0.7, 1.7], [1.7, 2.7], [2.7, 4.8], [4.8, 7.3], [7.3, 9.8], [9.8, 11.1]];
 
     const scene = (i) => {
       const [s, e] = ranges[i];
@@ -564,32 +572,48 @@ class Component extends DCLogic {
         : 'background:transparent;color:rgba(246,236,238,0.75);border:1px solid rgba(246,236,238,0.3);',
     }));
 
-    // scene 4: optional extras switch on one by one
-    const l4 = local(4);
+    // scene 4: the extras switch on one by one as you scroll, then the switches are yours to click
     const labels = ['Up next list', 'How to request', 'Colors from the album art', 'Pop up when a song starts, then hide'];
-    // the up next list is already on when the scene opens; the others switch on as you scroll
-    const av = labels.map((_, k) => (k === 0 ? 1 : clamp(l4 * 3.4 - (k - 1))));
+    const starts = [null, 5.4, 5.8, 6.2];
+    const auto = labels.map((_, k) => (starts[k] === null ? 1 : clamp((t - starts[k]) / 0.3)));
+    const manual = this.state.manual;
+    const av = manual ? manual.map((on) => (on ? 1 : 0)) : auto;
     const toggles = labels.map((label, k) => ({
       label,
-      track: `background:${av[k] > 0.5 ? '#ff5468' : 'rgba(246,236,238,0.25)'};`,
-      knob: `transform:translateX(${(av[k] * 18).toFixed(1)}px);`,
+      on: av[k] > 0.5,
+      track: `background:${av[k] > 0.5 ? '#ff5468' : 'rgba(246,236,238,0.25)'};transition:background-color 0.2s ease;`,
+      knob: `transform:translateX(${(av[k] * 18).toFixed(1)}px);transition:transform 0.2s ease;`,
+      toggle: () => {
+        const next = (this.state.manual || auto.map((v) => v > 0.5)).slice();
+        next[k] = !next[k];
+        this.setState({ manual: next });
+      },
     }));
+    const easing = manual ? 'transition:opacity 0.3s ease, transform 0.3s ease;' : '';
+    // "Pop up when a song starts, then hide": while it is on, the overlay shows for 3.6 s of every 6
+    const popOn = av[3] > 0.5;
+    this._popOn = popOn;
+    const popVisible = !popOn || (this.state.tick % 6000) < 3600;
+    const popStyle = `opacity:${popVisible ? 1 : 0};transform:translateY(${popVisible ? 0 : 18}px);transition:opacity 0.5s ease, transform 0.5s ease;`;
+    // the cheeky nudge slides in at an angle once the last switch has flipped
+    const tryV = clamp((t - 6.35) / 0.3);
+    const tryStyle = `opacity:${tryV.toFixed(3)};transform:translate(${((1 - tryV) * 160).toFixed(1)}px, ${((1 - tryV) * 50).toFixed(1)}px) rotate(${(-6 - (1 - tryV) * 12).toFixed(1)}deg);`;
     // colors taken from a red album cover: card, outline and bar shift from neutral to the cover's reds
     const tintMix = [18, 17, 20].map((c, k) => Math.round(c + ([62, 10, 14][k] - c) * av[2]));
     const tintStyle = `background:rgba(${tintMix.join(',')},0.92);`;
     const accMix = [242, 169, 59].map((c, k) => Math.round(c + ([227, 52, 47][k] - c) * av[2]));
     const accentCol = `rgb(${accMix.join(',')})`;
-    const nextStyle = `opacity:${av[0].toFixed(3)};transform:translateY(${((1 - av[0]) * 16).toFixed(1)}px);`;
-    const hintStyle = `opacity:${av[1].toFixed(3)};transform:translateY(${((1 - av[1]) * 12).toFixed(1)}px);`;
+    const nextStyle = `opacity:${av[0].toFixed(3)};transform:translateY(${((1 - av[0]) * 16).toFixed(1)}px);${easing}`;
+    const hintStyle = `opacity:${av[1].toFixed(3)};transform:translateY(${((1 - av[1]) * 12).toFixed(1)}px);${easing}`;
 
     // easter egg: lines, overlay card and controls arrive one after another
     const eg = (a, b) => clamp((t - a) / (b - a));
     const eggStyle = (v) => `opacity:${v.toFixed(3)};transform:translateY(${((1 - v) * 12).toFixed(1)}px);`;
-    const eKick = eggStyle(eg(8.4, 8.6));
-    const eChat0 = eggStyle(eg(8.55, 8.75));
-    const eChat1 = eggStyle(eg(8.7, 8.95));
-    const eCard = eggStyle(eg(8.9, 9.2));
-    const eCtl = eggStyle(eg(9.1, 9.35));
+    const eKick = eggStyle(eg(9.8, 10.0));
+    const eChat0 = eggStyle(eg(9.95, 10.15));
+    const eChat1 = eggStyle(eg(10.1, 10.35));
+    const eCard = eggStyle(eg(10.3, 10.6));
+    const eCtl = eggStyle(eg(10.5, 10.75));
     const playing = this.state.playing;
     const volPct = String(Math.round(this.state.vol * 100));
 
@@ -649,7 +673,7 @@ class Component extends DCLogic {
       recordStyle: `animation:crab-spin 5s linear infinite;animation-play-state:${playing ? 'running' : 'paused'};`,
       togglePlay: () => this._toggle(),
       setVol: (e) => this._setVol(e),
-      toggles, tintStyle, accentCol, nextStyle, hintStyle,
+      toggles, tintStyle, accentCol, nextStyle, hintStyle, popStyle, tryStyle,
       railStyle: `height:${(p * 100).toFixed(1)}%;`,
       counter: String(sceneNo).padStart(2, '0'),
     };
