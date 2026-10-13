@@ -22,7 +22,7 @@ sc-for, sc-if { display: contents; }
 <body>
 <noscript><p style="font-family: system-ui, sans-serif; padding: 24px; color: #f6ecee">Crabapple's page needs JavaScript. The beta is on the <a href="https://github.com/kerdylives-beep/applecrap/releases">releases page</a>.</p></noscript>
 <div id="app">
-<div id="crab-track" style="position: relative; height: 740vh; width: 100%; font-family: 'DM Sans', system-ui, sans-serif; color: #f6ecee">
+<div id="crab-track" style="position: relative; height: 870vh; width: 100%; font-family: 'DM Sans', system-ui, sans-serif; color: #f6ecee">
 <div style="position: sticky; top: 0; height: 100vh; width: 100%; overflow: hidden; {{bg}}">
 
 <!-- ambient layers -->
@@ -484,10 +484,10 @@ class Component extends DCLogic {
   renderVals() {
     const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
     const p = this.state.p;
-    const units = 8.0;
+    const units = 9.6;
     const t = p * units;
     // scene ranges in scroll units: the overlay styles get the longest stretch, the easter egg is last
-    const ranges = [[0, 0.7], [0.7, 1.7], [1.7, 2.7], [2.7, 4.8], [4.8, 5.9], [5.9, 7.0], [7.0, 8.3]];
+    const ranges = [[0, 0.7], [0.7, 1.7], [1.7, 2.7], [2.7, 4.8], [4.8, 5.9], [5.9, 8.4], [8.4, 9.7]];
 
     const scene = (i) => {
       const [s, e] = ranges[i];
@@ -585,11 +585,11 @@ class Component extends DCLogic {
     // easter egg: lines, overlay card and controls arrive one after another
     const eg = (a, b) => clamp((t - a) / (b - a));
     const eggStyle = (v) => `opacity:${v.toFixed(3)};transform:translateY(${((1 - v) * 12).toFixed(1)}px);`;
-    const eKick = eggStyle(eg(7.0, 7.2));
-    const eChat0 = eggStyle(eg(7.15, 7.35));
-    const eChat1 = eggStyle(eg(7.3, 7.55));
-    const eCard = eggStyle(eg(7.5, 7.8));
-    const eCtl = eggStyle(eg(7.7, 7.95));
+    const eKick = eggStyle(eg(8.4, 8.6));
+    const eChat0 = eggStyle(eg(8.55, 8.75));
+    const eChat1 = eggStyle(eg(8.7, 8.95));
+    const eCard = eggStyle(eg(8.9, 9.2));
+    const eCtl = eggStyle(eg(9.1, 9.35));
     const playing = this.state.playing;
     const volPct = String(Math.round(this.state.vol * 100));
 
