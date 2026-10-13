@@ -1,6 +1,8 @@
 // Back and Forward for the embedded Apple Music player window, which has no
-// browser toolbar. A small pill in the top-right corner, plus the usual
-// shortcuts (Alt+Left / Alt+Right) and the mouse's side buttons.
+// browser toolbar. A small pill in the sidebar's top row, beside the Apple
+// Music logo, plus the usual shortcuts (Alt+Left / Alt+Right) and the mouse's
+// side buttons. The top-right corner looked free but isn't: playlist pages put
+// their share and menu buttons there, and Search puts its tabs there.
 //
 // There is deliberately no Reload: reloading music.apple.com stops the music.
 // Back and Forward stay inside Apple's single-page app, so playback goes on.
@@ -76,8 +78,9 @@
         :host { all: initial; }
         .pill {
           position: fixed;
-          top: 14px;
-          right: 18px;
+          /* Until place() finds the sidebar. */
+          top: 12px;
+          left: 64px;
           z-index: 2147483647;
           display: flex;
           gap: 2px;
@@ -121,7 +124,7 @@
         .tip {
           position: absolute;
           top: calc(100% + 8px);
-          right: 0;
+          left: 0;
           padding: 5px 9px;
           border-radius: 7px;
           background: rgba(20, 20, 22, 0.94);
@@ -170,6 +173,43 @@
     if (nav) nav.addEventListener('currententrychange', refresh)
     window.addEventListener('popstate', refresh)
     document.documentElement.appendChild(host)
+
+    const pill = root.querySelector('.pill')
+    const place = () => {
+      const spot = findSpot(pill.offsetWidth, pill.offsetHeight)
+      if (!spot) return
+      pill.style.left = Math.round(spot.left) + 'px'
+      pill.style.top = Math.round(spot.top) + 'px'
+    }
+    place()
+    window.addEventListener('resize', place)
+    if (nav) nav.addEventListener('currententrychange', () => setTimeout(place, 50))
+    // Apple's app can rebuild its sidebar; a cheap check keeps the pill on it.
+    setInterval(place, 2000)
+  }
+
+  // Where the pill goes, following Apple's own layout:
+  // - a normal window has a sidebar: its top row, right-aligned, level with
+  //   the logo;
+  // - a narrow window folds the sidebar into a top bar (menu button left,
+  //   logo middle, Sign In or the account on the right): just after the menu
+  //   button.
+  function findSpot(width, height) {
+    const sidebar = document.querySelector('[data-testid="navigation"]')
+    if (!sidebar) return null
+    const bar = sidebar.getBoundingClientRect()
+    if (bar.width === 0 || bar.height === 0) return null
+    const logo = sidebar.querySelector('.logo a') || sidebar.querySelector('.logo')
+    const logoBox = logo && logo.getBoundingClientRect()
+
+    if (bar.height > 120 && logoBox && logoBox.height > 0) {
+      const left = Math.max(logoBox.right + 12, bar.right - 14 - width)
+      return { left, top: logoBox.top + logoBox.height / 2 - height / 2 }
+    }
+    const menu = sidebar.querySelector('button.menuicon')
+    const menuBox = menu && menu.getBoundingClientRect()
+    const left = menuBox && menuBox.width > 0 ? menuBox.right + 8 : bar.left + 12
+    return { left, top: bar.top + bar.height / 2 - height / 2 }
   }
 
   // Init scripts run before the page exists; wait for it.
