@@ -705,13 +705,18 @@ async fn handle_chat_command(context: &Arc<AppContext>, message: &ChatMessage) -
                     .await;
                 return Some("Only mods can skip.".to_string());
             }
-            let (ok, reply) = match context
-                .player_bridge
-                .run_command(&context.handle, "skip", None)
-                .await
-            {
-                Ok(_) => (true, "Skipped.".to_string()),
-                Err(error) => (false, error.to_string()),
+            let probe = context.current_probe().await;
+            let (ok, reply) = if playing_title(&probe).is_none() {
+                (false, NOTHING_PLAYING.to_string())
+            } else {
+                match context
+                    .player_bridge
+                    .run_command(&context.handle, "skip", None)
+                    .await
+                {
+                    Ok(_) => (true, format_skip_reply(&probe)),
+                    Err(error) => (false, error.to_string()),
+                }
             };
             context
                 .add_log(
@@ -729,19 +734,32 @@ async fn handle_chat_command(context: &Arc<AppContext>, message: &ChatMessage) -
 /// player's probe snapshot. Pure so it can be unit tested without an
 /// `AppContext`.
 fn format_song_reply(probe: &ProbeSnapshot) -> String {
-    let title = probe.title.trim();
-    let is_playing_or_paused =
-        probe.status.eq_ignore_ascii_case("playing") || probe.status.eq_ignore_ascii_case("paused");
-
-    if title.is_empty() || !is_playing_or_paused {
-        return "Nothing is playing right now.".to_string();
-    }
+    let Some(title) = playing_title(probe) else {
+        return NOTHING_PLAYING.to_string();
+    };
 
     let artist = probe.artist.trim();
     if artist.is_empty() {
         format!("Now playing: {title}")
     } else {
         format!("Now playing: {title} — {artist}")
+    }
+}
+
+const NOTHING_PLAYING: &str = "Nothing is playing right now.";
+
+/// The loaded track's title, if a track is playing or paused.
+fn playing_title(probe: &ProbeSnapshot) -> Option<&str> {
+    let title = probe.title.trim();
+    let is_playing_or_paused =
+        probe.status.eq_ignore_ascii_case("playing") || probe.status.eq_ignore_ascii_case("paused");
+    (!title.is_empty() && is_playing_or_paused).then_some(title)
+}
+
+fn format_skip_reply(probe: &ProbeSnapshot) -> String {
+    match playing_title(probe) {
+        Some(title) => format!("Skipped {title}."),
+        None => "Skipped.".to_string(),
     }
 }
 
@@ -924,6 +942,23 @@ mod tests {
             ..ProbeSnapshot::default()
         };
         assert_eq!(format_song_reply(&probe), "Now playing: Freefall — Durand Bernarr");
+    }
+
+    #[test]
+    fn skip_needs_a_loaded_track() {
+        let stopped = ProbeSnapshot {
+            status: "Stopped".to_string(),
+            title: "Human Nature".to_string(),
+            ..ProbeSnapshot::default()
+        };
+        assert_eq!(playing_title(&stopped), None);
+
+        let playing = ProbeSnapshot {
+            status: "Playing".to_string(),
+            title: "Human Nature".to_string(),
+            ..ProbeSnapshot::default()
+        };
+        assert_eq!(format_skip_reply(&playing), "Skipped Human Nature.");
     }
 
     #[test]
