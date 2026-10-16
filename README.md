@@ -140,6 +140,9 @@ Default request command:
 !request song title artist
 ```
 
+You can change it in Setup, for example to `!sr`. It's one word, and the `!` is added for you if
+you leave it off.
+
 Examples:
 
 ```text
