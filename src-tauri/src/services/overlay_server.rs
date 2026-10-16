@@ -74,8 +74,14 @@ pub async fn serve(context: Arc<AppContext>, port: u16) {
     let slots = Arc::new(Semaphore::new(16));
 
     loop {
-        let Ok((stream, _)) = listener.accept().await else {
-            continue;
+        let stream = match listener.accept().await {
+            Ok((stream, _)) => stream,
+            Err(_) => {
+                // Errors like running out of handles repeat straight away;
+                // retrying in a tight loop would pin a CPU core.
+                tokio::time::sleep(Duration::from_millis(250)).await;
+                continue;
+            }
         };
         let Ok(permit) = Arc::clone(&slots).try_acquire_owned() else {
             continue; // over the cap: drop the connection
