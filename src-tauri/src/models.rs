@@ -103,6 +103,19 @@ pub struct QueueItem {
     pub handoff_note: Option<String>,
     pub handoff_updated_at: Option<String>,
     pub dispatched_at: Option<String>,
+    /// Set for Channel Points requests. The redemption stays unfulfilled
+    /// while the request waits, so removing it can refund the points.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub redemption: Option<PointsRedemption>,
+}
+
+/// The Twitch redemption behind a Channel Points request.
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PointsRedemption {
+    pub broadcaster_id: String,
+    pub reward_id: String,
+    pub redemption_id: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -970,7 +983,23 @@ pub fn compact_log_message(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::PersistedState;
+    use super::{PersistedState, PointsRedemption, QueueItem};
+
+    #[test]
+    fn queue_items_keep_their_redemption_and_old_ones_still_load() {
+        let old: QueueItem = serde_json::from_str(r#"{"id":"a","requestedBy":"viewer","query":"song"}"#).unwrap();
+        assert_eq!(old.redemption, None);
+        assert!(!serde_json::to_string(&old).unwrap().contains("redemption"));
+
+        let mut item = old;
+        item.redemption = Some(PointsRedemption {
+            broadcaster_id: "1".into(),
+            reward_id: "r".into(),
+            redemption_id: "x".into(),
+        });
+        let round_trip: QueueItem = serde_json::from_str(&serde_json::to_string(&item).unwrap()).unwrap();
+        assert_eq!(round_trip.redemption, item.redemption);
+    }
 
     /// Old alpha state.json files persisted a full "automation" object
     /// (adapter, controlMode, handoffMode, dispatchHotkey, autoArmEnabled).

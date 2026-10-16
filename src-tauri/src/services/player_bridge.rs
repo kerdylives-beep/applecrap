@@ -540,6 +540,7 @@ mod probe_matching_tests {
             handoff_note: None,
             handoff_updated_at: None,
             dispatched_at: None,
+            redemption: None,
         };
 
         let (matched, confidence, _) = match_queue_item(&session, &queue_item);
@@ -580,6 +581,7 @@ mod probe_matching_tests {
             handoff_note: None,
             handoff_updated_at: None,
             dispatched_at: None,
+            redemption: None,
         };
 
         let (matched, _, _) = match_queue_item(&session, &queue_item);

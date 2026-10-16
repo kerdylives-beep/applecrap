@@ -1,12 +1,14 @@
 //! Channel Points song requests: keeping the app's reward in line with the
-//! settings, listening for redemptions, and settling each one — fulfilled
-//! when the song is queued, refunded when it can't be.
+//! settings, listening for redemptions, and settling each one — refunded
+//! when it can't be queued. A queued one stays unfulfilled until its song
+//! plays (fulfilled) or its request is removed (refunded).
 
 use std::future::Future;
 
 use crate::{
     models::{
-        AuthSlot, ChannelPointsPhase, ChannelPointsSettings, ChannelPointsState, TwitchAuth,
+        AuthSlot, ChannelPointsPhase, ChannelPointsSettings, ChannelPointsState, PointsRedemption,
+        TwitchAuth,
     },
     services::{
         channel_points::{self, HelixAuth, HelixError, Redemption, RewardSpec},
@@ -508,9 +510,10 @@ impl AppContext {
         true
     }
 
-    /// Runs a redemption through the same rules as a chat request. Queued:
-    /// the redemption is fulfilled. Turned away: it's cancelled, which
-    /// refunds the viewer's points.
+    /// Runs a redemption through the same rules as a chat request. Turned
+    /// away: it's cancelled, which refunds the viewer's points. Queued: it
+    /// stays unfulfilled with the request until the song plays or the
+    /// request is removed (`settle_request_redemption`).
     async fn settle_redemption(
         self: &Arc<Self>,
         broadcaster_id: &str,
@@ -518,6 +521,16 @@ impl AppContext {
         redemption: Redemption,
     ) {
         if !self.first_sighting(&redemption.id) {
+            return;
+        }
+        // Still waiting in the queue from before a restart: the catch-up
+        // lists it again because it isn't fulfilled yet.
+        let already_queued = self.persisted.read().await.queue.iter().any(|item| {
+            item.redemption
+                .as_ref()
+                .is_some_and(|queued| queued.redemption_id == redemption.id)
+        });
+        if already_queued {
             return;
         }
         let query = redemption.user_input.trim();
@@ -528,8 +541,19 @@ impl AppContext {
                 "that request waited too long for the app, so your points were refunded.".to_string(),
             )
         } else {
+            let held = PointsRedemption {
+                broadcaster_id: broadcaster_id.to_string(),
+                reward_id: reward_id.to_string(),
+                redemption_id: redemption.id.clone(),
+            };
             let result = self
-                .process_request(&redemption.user_name, query, false, "channel-points")
+                .process_request_with_redemption(
+                    &redemption.user_name,
+                    query,
+                    false,
+                    "channel-points",
+                    Some(held),
+                )
                 .await;
             if result.ok {
                 (true, result.message)
@@ -548,36 +572,72 @@ impl AppContext {
         )
         .await;
 
+        if !queued {
+            let held = PointsRedemption {
+                broadcaster_id: broadcaster_id.to_string(),
+                reward_id: reward_id.to_string(),
+                redemption_id: redemption.id.clone(),
+            };
+            self.update_redemption(&held, false, &redemption.user_name)
+                .await;
+        }
+
+        self.send_chat(format!("@{} {message}", redemption.user_login))
+            .await;
+    }
+
+    /// Settles the redemption behind a request that left the queue:
+    /// fulfilled once its song plays, refunded if it was removed first.
+    /// True if a redemption was settled.
+    pub(super) async fn settle_request_redemption(&self, item: &QueueItem, played: bool) -> bool {
+        let Some(held) = item.redemption.as_ref() else {
+            return false;
+        };
+        let settled = self.update_redemption(held, played, &item.requested_by).await;
+        if settled && !played {
+            self.add_log(
+                LogLevel::Info,
+                format!(
+                    "Refunded @{}'s Channel Points for the removed request \"{}\".",
+                    item.requested_by, item.query
+                ),
+            )
+            .await;
+        }
+        settled
+    }
+
+    /// Marks a redemption fulfilled or cancelled (refunded) on Twitch.
+    async fn update_redemption(&self, held: &PointsRedemption, fulfilled: bool, viewer: &str) -> bool {
         let http = &self.http;
-        let redemption_id = redemption.id.as_str();
         let settled = self
             .with_broadcaster(|client_id, token| async move {
                 let auth = HelixAuth { client_id, token: &token };
                 channel_points::settle_redemption(
                     http,
                     &auth,
-                    broadcaster_id,
-                    reward_id,
-                    redemption_id,
-                    queued,
+                    &held.broadcaster_id,
+                    &held.reward_id,
+                    &held.redemption_id,
+                    fulfilled,
                 )
                 .await
             })
             .await;
-        if let Err(error) = settled {
-            self.add_log(
-                LogLevel::Warn,
-                format!(
-                    "Couldn't {} @{}'s redemption on Twitch: {error}. Settle it from the reward queue in your Twitch dashboard.",
-                    if queued { "complete" } else { "refund" },
-                    redemption.user_name
-                ),
-            )
-            .await;
+        match settled {
+            Ok(()) => true,
+            Err(error) => {
+                self.add_log(
+                    LogLevel::Warn,
+                    format!(
+                        "Couldn't {} @{viewer}'s redemption on Twitch: {error}. Settle it from the reward queue in your Twitch dashboard.",
+                        if fulfilled { "complete" } else { "refund" },
+                    ),
+                )
+                .await;
+                false
+            }
         }
-
-        self.send_chat(format!("@{} {message}", redemption.user_login))
-            .await;
     }
 }
 

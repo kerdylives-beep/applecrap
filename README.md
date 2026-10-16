@@ -124,8 +124,10 @@ Affiliate and Partner channels can take requests through Channel Points instead 
 2. In **Setup**, tick **Take song requests through Channel Points** and pick a reward name and cost. It saves by itself.
 
 AppleCrap creates the reward on your channel. Each redemption goes through the same queue rules as
-`!request`: if the song is queued, the redemption is marked complete; if it is turned away (queue
-full, duplicate, too long), the viewer's points are refunded and they are told why in chat.
+`!request`. If it is turned away (queue full, duplicate, too long), the viewer's points are refunded
+and they are told why in chat. If it is queued, the redemption waits in your Twitch reward queue and
+is marked complete when the song plays. If the request is removed first (`!remove`, the ✕ button or
+**Clear**), the points are refunded.
 Redemptions made while the app was closed are picked up the next time it starts (ones older than
 six hours are refunded instead). Turning the feature off hides the reward.
 
