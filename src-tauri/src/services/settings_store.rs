@@ -503,6 +503,7 @@ impl LegacyQueueItem {
             handoff_note: None,
             handoff_updated_at: None,
             dispatched_at: None,
+            redemption: None,
         }
     }
 }

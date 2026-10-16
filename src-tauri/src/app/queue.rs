@@ -16,6 +16,20 @@ impl AppContext {
         is_privileged: bool,
         source: &str,
     ) -> CommandResult {
+        self.process_request_with_redemption(requested_by, query, is_privileged, source, None)
+            .await
+    }
+
+    /// `process_request` for a Channel Points redemption, which is kept on
+    /// the queued request so it can be settled later.
+    pub(super) async fn process_request_with_redemption(
+        self: &Arc<Self>,
+        requested_by: &str,
+        query: &str,
+        is_privileged: bool,
+        source: &str,
+        redemption: Option<crate::models::PointsRedemption>,
+    ) -> CommandResult {
         let query = query.trim();
         let snapshot = self.persisted.read().await.clone();
 
@@ -72,13 +86,14 @@ impl AppContext {
             }
         }
 
-        let request = queue_engine::build_queue_item(
+        let mut request = queue_engine::build_queue_item(
             requested_by,
             query,
             source,
             track.clone(),
             match_confidence,
         );
+        request.redemption = redemption;
         {
             // Re-check against the live queue before adding. The checks above
             // ran on a snapshot taken before the catalog lookup awaited the
@@ -142,12 +157,18 @@ impl AppContext {
     /// `remove_request`, it never touches the player: the song is meant to
     /// play.
     pub(super) async fn retire_playing_request(self: &Arc<Self>, id: &str) {
-        {
+        let retired = {
             let mut persisted = self.persisted.write().await;
+            let retired = persisted.queue.iter().find(|item| item.id == id).cloned();
             persisted.queue.retain(|item| item.id != id);
-        }
+            retired
+        };
         let _ = self.save_persisted().await;
         self.emit_state().await;
+        if let Some(item) = retired {
+            // The song played: the viewer got what they paid for.
+            self.settle_request_redemption(&item, true).await;
+        }
     }
 
     pub async fn remove_request(self: &Arc<Self>, id: &str) -> AppState {
@@ -157,22 +178,28 @@ impl AppContext {
             persisted.queue.retain(|item| item.id != id);
             removed
         };
-        if let Some(item) = removed {
-            self.withdraw_from_player(&item).await;
+        if let Some(item) = removed.as_ref() {
+            self.withdraw_from_player(item).await;
         }
         let _ = self.save_persisted().await;
         self.emit_state().await;
+        if let Some(item) = removed.as_ref() {
+            self.settle_request_redemption(item, false).await;
+        }
         self.ensure_queue_progress("queue removal").await;
         self.snapshot().await
     }
 
     pub async fn clear_queue(&self) -> AppState {
-        {
+        let removed = {
             let mut persisted = self.persisted.write().await;
-            persisted.queue.clear();
-        }
+            std::mem::take(&mut persisted.queue)
+        };
         let _ = self.save_persisted().await;
         self.emit_state().await;
+        for item in &removed {
+            self.settle_request_redemption(item, false).await;
+        }
         self.snapshot().await
     }
 
@@ -196,7 +223,11 @@ impl AppContext {
                 )
                 .await;
                 self.ensure_queue_progress("user remove").await;
-                CommandResult::ok("Removed your most recent request.")
+                if self.settle_request_redemption(&item, false).await {
+                    CommandResult::ok("Removed your most recent request. Your points were refunded.")
+                } else {
+                    CommandResult::ok("Removed your most recent request.")
+                }
             }
             // Nothing waiting, but their own request may be the one playing.
             None if self.is_playing_request_of(requested_by).await => {

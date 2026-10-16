@@ -165,6 +165,7 @@ pub fn build_queue_item(
         handoff_note: None,
         handoff_updated_at: None,
         dispatched_at: None,
+        redemption: None,
     }
 }
 
