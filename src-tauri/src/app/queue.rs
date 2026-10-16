@@ -167,9 +167,14 @@ impl AppContext {
     }
 
     pub async fn clear_queue(&self) -> AppState {
-        {
+        let removed = {
             let mut persisted = self.persisted.write().await;
-            persisted.queue.clear();
+            std::mem::take(&mut persisted.queue)
+        };
+        // A request already handed to the player sits in Apple Music's
+        // Playing Next and would still play unless it's taken back out.
+        for item in &removed {
+            self.withdraw_from_player(item).await;
         }
         let _ = self.save_persisted().await;
         self.emit_state().await;
