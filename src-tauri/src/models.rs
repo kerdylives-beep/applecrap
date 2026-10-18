@@ -906,11 +906,7 @@ impl AppSettings {
             .to_string();
         self.twitch.bot_username = self.twitch.bot_username.trim().to_string();
         self.twitch.oauth_token = normalize_twitch_oauth_token(&self.twitch.oauth_token);
-        self.twitch.request_command = if self.twitch.request_command.trim().is_empty() {
-            "!request".to_string()
-        } else {
-            self.twitch.request_command.trim().to_string()
-        };
+        self.twitch.request_command = normalize_request_command(&self.twitch.request_command);
         self.apple_music.storefront = if self.apple_music.storefront.trim().is_empty() {
             "us".to_string()
         } else {
@@ -937,6 +933,19 @@ impl CommandResult {
 
 pub fn now_iso() -> String {
     Utc::now().to_rfc3339()
+}
+
+/// Chat only matches one word starting with `!`, so "sr" or "!sr song"
+/// would never match anything. Keep the first word and make sure it starts
+/// with `!`.
+pub fn normalize_request_command(value: &str) -> String {
+    let word = value.split_whitespace().next().unwrap_or_default();
+    let name = word.trim_start_matches('!');
+    if name.is_empty() {
+        "!request".to_string()
+    } else {
+        format!("!{name}")
+    }
 }
 
 pub fn normalize_twitch_oauth_token(value: &str) -> String {
@@ -970,7 +979,18 @@ pub fn compact_log_message(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::PersistedState;
+    use super::{normalize_request_command, PersistedState};
+
+    #[test]
+    fn request_command_always_becomes_one_bang_word() {
+        assert_eq!(normalize_request_command("!sr"), "!sr");
+        assert_eq!(normalize_request_command("  !SR  "), "!SR");
+        assert_eq!(normalize_request_command("sr"), "!sr");
+        assert_eq!(normalize_request_command("!sr song"), "!sr");
+        assert_eq!(normalize_request_command("!!sr"), "!sr");
+        assert_eq!(normalize_request_command("!"), "!request");
+        assert_eq!(normalize_request_command("   "), "!request");
+    }
 
     /// Old alpha state.json files persisted a full "automation" object
     /// (adapter, controlMode, handoffMode, dispatchHotkey, autoArmEnabled).
