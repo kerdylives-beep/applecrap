@@ -61,8 +61,8 @@ UIA/automation/experimental/flicker language.
 
 ## 9. Visual rework backlog (planned next)
 
-The app is maintained for a friend who streams — the target user is NOT the
-developer, so first-run self-service matters most. When redoing the visuals:
+The app is for streamers in general — the target user is NOT the developer
+but a non-technical streamer, so first-run self-service matters most. When redoing the visuals:
 
 - **Twitch OAuth token onboarding is the roughest edge.** The Bot settings
   just ask for a token "starting with oauth:"; a non-technical user has no
