@@ -117,6 +117,10 @@ pub struct TwitchSettings {
     /// reads these posts to follow the stream's music.
     #[serde(default)]
     pub announce_songs: bool,
+    /// Post them in the bot account's own channel instead, so they don't
+    /// crowd the streamer's chat. Listeners follow that channel.
+    #[serde(default)]
+    pub announce_in_bot_channel: bool,
 }
 
 impl Default for TwitchSettings {
@@ -128,6 +132,7 @@ impl Default for TwitchSettings {
             request_command: "!request".to_string(),
             auto_connect: false,
             announce_songs: false,
+            announce_in_bot_channel: false,
         }
     }
 }
@@ -706,6 +711,7 @@ pub struct TwitchSettingsPatch {
     pub request_command: Option<String>,
     pub auto_connect: Option<bool>,
     pub announce_songs: Option<bool>,
+    pub announce_in_bot_channel: Option<bool>,
 }
 
 #[derive(Clone, Deserialize, Debug, Default)]
@@ -831,6 +837,9 @@ impl AppSettings {
             }
             if let Some(announce_songs) = twitch.announce_songs {
                 self.twitch.announce_songs = announce_songs;
+            }
+            if let Some(in_bot_channel) = twitch.announce_in_bot_channel {
+                self.twitch.announce_in_bot_channel = in_bot_channel;
             }
         }
 

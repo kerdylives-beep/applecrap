@@ -42,7 +42,12 @@ impl AppContext {
             &settings.apple_music.storefront,
             requested_by.as_deref().filter(|name| !name.trim().is_empty()),
         );
-        self.send_chat(text).await;
+        let target = self.announce_channel().await;
+        if target == settings.twitch.channel.trim().trim_start_matches('#').to_lowercase() {
+            self.send_chat(text).await;
+        } else {
+            self.send_chat_in(&target, text).await;
+        }
     }
 }
 

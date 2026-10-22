@@ -71,6 +71,7 @@ const defaultSettings: AppSettings = {
     requestCommand: '!request',
     autoConnect: false,
     announceSongs: false,
+    announceInBotChannel: false,
   },
   requestLimits: {
     maxQueueSize: 25,

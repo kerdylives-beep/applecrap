@@ -80,6 +80,7 @@ impl AppContext {
         .await;
         if was_on {
             self.add_log(LogLevel::Info, "Listen together: stopped.").await;
+            self.ensure_queue_progress("listen together stopped").await;
         }
         self.snapshot().await
     }

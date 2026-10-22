@@ -53,13 +53,28 @@ static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
 pub enum Outbound {
     /// A protocol line written immediately (e.g. `QUIT`). Includes CRLF.
     Raw(String),
-    /// A chat reply: rate-limited, and dropped if it goes stale.
-    Chat { text: String, queued_at: Instant },
+    /// A chat message: rate-limited, and dropped if it goes stale. Goes to
+    /// the session's channel unless `channel` names another one.
+    Chat {
+        channel: Option<String>,
+        text: String,
+        queued_at: Instant,
+    },
 }
 
 impl Outbound {
     pub fn chat(text: impl Into<String>) -> Self {
         Outbound::Chat {
+            channel: None,
+            text: text.into(),
+            queued_at: Instant::now(),
+        }
+    }
+
+    /// A message for another channel (joined on first use).
+    pub fn chat_in(channel: &str, text: impl Into<String>) -> Self {
+        Outbound::Chat {
+            channel: Some(channel.trim().trim_start_matches('#').to_lowercase()),
             text: text.into(),
             queued_at: Instant::now(),
         }
@@ -366,7 +381,9 @@ where
     let mut keepalive = tokio::time::interval(timing.keepalive_every);
     keepalive.tick().await; // the first tick fires immediately
     let mut limiter = ChatRateLimiter::twitch_default();
-    let mut pending: VecDeque<(String, Instant)> = VecDeque::new();
+    let mut pending: VecDeque<(Option<String>, String, Instant)> = VecDeque::new();
+    // Other channels this session has joined to post in.
+    let mut joined: Vec<String> = Vec::new();
 
     loop {
         let send_at = pending
@@ -397,12 +414,14 @@ where
                         return end(SessionEnd::AuthFailed(message), welcomed);
                     }
                     Inbound::Reconnect => return end(SessionEnd::Reconnect, welcomed),
-                    Inbound::Chat(message) => {
+                    // Only the session's own channel takes commands; other
+                    // joined channels are just for posting.
+                    Inbound::Chat(message) if message.channel == channel => {
                         // Never block the read loop on app work; a full queue
                         // during a flood drops the message instead.
                         let _ = events.try_send(SessionEvent::Chat(message));
                     }
-                    Inbound::Other => {}
+                    Inbound::Chat(_) | Inbound::Other => {}
                 }
             }
             outbound = outbound_rx.recv() => match outbound {
@@ -411,11 +430,11 @@ where
                         return end(SessionEnd::Io(error.to_string()), welcomed);
                     }
                 }
-                Some(Outbound::Chat { text, queued_at }) => {
+                Some(Outbound::Chat { channel: target, text, queued_at }) => {
                     if pending.len() >= MAX_PENDING_REPLIES {
                         pending.pop_front();
                     }
-                    pending.push_back((text, queued_at));
+                    pending.push_back((target, text, queued_at));
                 }
                 None => return end(SessionEnd::Closed, welcomed),
             },
@@ -428,11 +447,19 @@ where
                 }
             }
             _ = tokio::time::sleep_until(send_at.unwrap_or_else(Instant::now)), if send_at.is_some() => {
-                if let Some((text, queued_at)) = pending.pop_front() {
+                if let Some((target, text, queued_at)) = pending.pop_front() {
                     if queued_at.elapsed() > MAX_REPLY_AGE {
                         continue;
                     }
-                    let line = format_privmsg(channel, &text);
+                    let target = target.unwrap_or_else(|| channel.to_string());
+                    if target != channel && !joined.contains(&target) {
+                        let join = format!("JOIN #{}\r\n", sanitize_irc_text(&target));
+                        if let Err(error) = send_line(&mut writer, &join).await {
+                            return end(SessionEnd::Io(error.to_string()), welcomed);
+                        }
+                        joined.push(target.clone());
+                    }
+                    let line = format_privmsg(&target, &text);
                     if let Err(error) = send_line(&mut writer, &line).await {
                         return end(SessionEnd::Io(error.to_string()), welcomed);
                     }
@@ -672,6 +699,8 @@ pub async fn follow_channel(channel: String, events: mpsc::Sender<FollowEvent>) 
 
 #[derive(Debug, Clone)]
 pub struct ChatMessage {
+    /// The channel it was said in, lower case, without `#`.
+    pub channel: String,
     pub login: String,
     pub display_name: String,
     pub message: String,
@@ -760,7 +789,7 @@ async fn handle_chat_command(context: &Arc<AppContext>, message: &ChatMessage) -
         }
         "!listen" => Some(listen_reply(
             settings.twitch.announce_songs,
-            &settings.twitch.channel,
+            &context.announce_channel().await,
         )),
         "!skip" => {
             if !message.is_mod_or_broadcaster {
@@ -833,15 +862,17 @@ fn format_skip_reply(probe: &ProbeSnapshot) -> String {
     }
 }
 
-/// How viewers join Listen together. It needs the "Now playing" posts on.
+/// How other streamers join Listen together: they play the music on their
+/// own Apple Music, in time, with this stream muted. It needs the
+/// "Now playing" posts on; `channel` is where they're posted.
 fn listen_reply(announcing: bool, channel: &str) -> String {
     if !announcing {
         return "Listen together is off right now.".to_string();
     }
     let channel = channel.trim().trim_start_matches('#').to_lowercase();
     format!(
-        "Listen along in full quality with your own Apple Music: get AppleCrap (github.com/kerdylives-beep/applecrap), \
-         click the apple at the top left 3 times, then enter {channel} in the Listen tab."
+        "Streamers: play this music in sync on your own Apple Music (keep this stream muted). Get AppleCrap \
+         (github.com/kerdylives-beep/applecrap), click the apple at the top left 3 times, then follow {channel} in the Listen tab."
     )
 }
 
@@ -864,6 +895,7 @@ fn privmsg_from(parsed: &irc::IrcMessage) -> Option<ChatMessage> {
             .unwrap_or(false);
 
     Some(ChatMessage {
+        channel: parsed.params[0].trim_start_matches('#').to_lowercase(),
         login,
         display_name,
         message,
@@ -959,6 +991,45 @@ mod tests {
         .await
         .expect("stale connection must end the session");
         assert!(matches!(outcome.end, SessionEnd::Stale));
+    }
+
+    #[tokio::test]
+    async fn other_channels_do_not_take_commands() {
+        let (_, _, events) = run_scripted(
+            b"@display-name=V :v!v@v.tmi.twitch.tv PRIVMSG #botchan :!sr echo
+:tmi.twitch.tv RECONNECT
+",
+        )
+        .await;
+        assert!(!events.iter().any(|event| matches!(event, SessionEvent::Chat(_))));
+    }
+
+    #[tokio::test]
+    async fn posting_in_another_channel_joins_it_first() {
+        let (client, mut server) = tokio::io::duplex(16 * 1024);
+        let (outbound_tx, mut outbound_rx) = mpsc::unbounded_channel();
+        let (event_tx, _event_rx) = mpsc::channel(16);
+        let session = tokio::spawn(async move {
+            session_loop(client, &identity(), "chan", &mut outbound_rx, &event_tx, Timing::LIVE).await
+        });
+
+        outbound_tx.send(Outbound::chat_in("#BotChan", "now playing")).unwrap();
+        let mut written = String::new();
+        let mut buffer = [0_u8; 1024];
+        while !written.contains("now playing\r\n") {
+            let read = tokio::time::timeout(Duration::from_secs(2), server.read(&mut buffer))
+                .await
+                .expect("the post must be written")
+                .unwrap();
+            assert!(read > 0, "session ended early: {written:?}");
+            written.push_str(&String::from_utf8_lossy(&buffer[..read]));
+        }
+        server.write_all(b":tmi.twitch.tv RECONNECT\r\n").await.unwrap();
+        session.await.unwrap();
+
+        let join = written.find("JOIN #botchan\r\n").expect("joins the other channel");
+        let post = written.find("PRIVMSG #botchan :now playing\r\n").expect("posts there");
+        assert!(join < post);
     }
 
     #[tokio::test]
@@ -1070,7 +1141,7 @@ mod tests {
 
     #[test]
     fn listen_reply_names_the_channel_only_when_announcing() {
-        assert!(listen_reply(true, "#Streamer").contains("enter streamer in the Listen tab"));
+        assert!(listen_reply(true, "#Streamer").contains("follow streamer in the Listen tab"));
         assert_eq!(listen_reply(false, "streamer"), "Listen together is off right now.");
     }
 }

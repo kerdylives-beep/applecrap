@@ -352,7 +352,9 @@ impl AppContext {
 
         {
             let mut runtime = self.runtime.write().await;
-            if runtime.auto_handoff_in_flight {
+            // While Listen together plays another streamer's music, requests
+            // wait in the queue; the next followed song would replace them.
+            if runtime.auto_handoff_in_flight || runtime.listen.phase != "off" {
                 return;
             }
             runtime.auto_handoff_in_flight = true;

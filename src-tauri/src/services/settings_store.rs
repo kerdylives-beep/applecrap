@@ -418,6 +418,7 @@ impl LegacyTwitchSettings {
             request_command: self.request_command,
             auto_connect: self.auto_connect,
             announce_songs: false,
+            announce_in_bot_channel: false,
         }
     }
 }

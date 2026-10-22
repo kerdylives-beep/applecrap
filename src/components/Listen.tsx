@@ -64,8 +64,9 @@ export function Listen({ store, state }: { store: AppStore; state: AppState }) {
           {on || listen.phase === 'error' ? <span className={cx(s.statusText, phase.tone)}>{phase.text}</span> : null}
         </div>
         <p className={s.hint}>
-          You found it! Hear a streamer&rsquo;s music in full quality on your own Apple Music, in time with their stream. It works with
-          channels running AppleCrap that post each new song in chat. Sign in to Apple Music in the player first.
+          You found it! Play another streamer&rsquo;s music on your own Apple Music, in time with their stream: mute their stream, then
+          follow the channel their AppleCrap posts songs in (<code>!listen</code> in their chat says which). Sign in to Apple Music in the
+          player first. Song requests wait in your queue while you listen.
         </p>
         <div className={cx(s.card, s.cardPad)}>
           <div className={s.grid2}>
@@ -75,7 +76,7 @@ export function Listen({ store, state }: { store: AppStore; state: AppState }) {
                 className={s.input}
                 value={channel}
                 disabled={on}
-                placeholder="streamer"
+                placeholder="channel"
                 onChange={(event) => setChannel(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !on && channel.trim()) {

@@ -46,6 +46,7 @@ export type AppSettings = {
     requestCommand: string
     autoConnect: boolean
     announceSongs: boolean
+    announceInBotChannel: boolean
   }
   requestLimits: {
     maxQueueSize: number
