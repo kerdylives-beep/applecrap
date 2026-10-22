@@ -13,6 +13,7 @@
   window.__applecrapFilter = true
 
   const PAGE_SIZE = 100
+  const PARALLEL_PAGES = 6
   const CACHE_FOR_MS = 10 * 60 * 1000
   const MAX_SHOWN = 200
   const cache = new Map() // playlist id -> { tracks, total, done, at, loading }
@@ -83,17 +84,43 @@
     const path = playlist.library
       ? `v1/me/library/playlists/${playlist.id}/tracks`
       : `v1/catalog/${music.storefrontId || 'us'}/playlists/${playlist.id}/tracks`
+    const page = async (offset) => {
+      const response = await music.api.music(path, { limit: PAGE_SIZE, offset })
+      return (response && response.data) || {}
+    }
     try {
-      let offset = 0
-      for (;;) {
-        const response = await music.api.music(path, { limit: PAGE_SIZE, offset })
-        const body = (response && response.data) || {}
-        const items = body.data || []
-        items.forEach((item) => entry.tracks.push(toTrack(item, entry.tracks.length)))
-        entry.total = (body.meta && body.meta.total) || entry.tracks.length
-        offset += items.length
-        onProgress(entry)
-        if (!body.next || items.length === 0) break
+      // The first page says how many songs there are; the rest are fetched
+      // several at a time (a 1,600-song playlist in about 2 s rather than 8).
+      const first = await page(0)
+      const firstItems = first.data || []
+      firstItems.forEach((item) => entry.tracks.push(toTrack(item, entry.tracks.length)))
+      entry.total = (first.meta && first.meta.total) || entry.tracks.length
+      onProgress(entry)
+      if (first.next && firstItems.length && entry.total > firstItems.length) {
+        const offsets = []
+        for (let offset = firstItems.length; offset < entry.total; offset += PAGE_SIZE) offsets.push(offset)
+        const pages = new Array(offsets.length)
+        let nextPage = 0
+        let loaded = firstItems.length
+        const worker = async () => {
+          while (nextPage < offsets.length) {
+            const at = nextPage++
+            pages[at] = (await page(offsets[at])).data || []
+            loaded += pages[at].length
+            entry.loadedCount = loaded
+            onProgress(entry)
+          }
+        }
+        await Promise.all(Array.from({ length: Math.min(PARALLEL_PAGES, offsets.length) }, worker))
+        pages.forEach((items) => items.forEach((item) => entry.tracks.push(toTrack(item, entry.tracks.length))))
+      } else if (first.next) {
+        // No total to plan with: follow the pages one by one.
+        let body = first
+        while (body.next && (body.data || []).length) {
+          body = await page(entry.tracks.length)
+          ;(body.data || []).forEach((item) => entry.tracks.push(toTrack(item, entry.tracks.length)))
+          onProgress(entry)
+        }
       }
       entry.done = true
     } catch (error) {
@@ -163,6 +190,99 @@
   const within = (promise, ms, message) =>
     Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))])
 
+  // ---- Fast start ---------------------------------------------------------
+  // Apple's player fetches a playlist's whole track list (100 at a time, one
+  // after another) before it plays anything: about 8 s for 1,600 songs. With
+  // the list already loaded here, queue just the first song, play it, and
+  // add the rest in the background.
+
+  let fillRun = 0
+
+  function shuffled(list) {
+    const copy = list.slice()
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[copy[i], copy[j]] = [copy[j], copy[i]]
+    }
+    return copy
+  }
+
+  async function putBack(music, keep) {
+    if (!keep.length) return
+    try {
+      await music.playNext({ songs: keep })
+    } catch (_) {
+      for (const id of keep.slice().reverse()) await music.playNext({ song: id })
+    }
+  }
+
+  // Plays `order` (tracks) from its first song. `shuffle` only sets the
+  // player's shuffle indicator: the order is already shuffled when it's on.
+  async function startFast(order, shuffle) {
+    const music = musicKit()
+    if (!music) throw new Error('Apple Music is still starting up.')
+    const ids = order.map((track) => track.id).filter(Boolean)
+    if (!ids.length) throw new Error('No songs to play.')
+    const keep = pendingRequests(music)
+    const run = ++fillRun
+    music.shuffleMode = 0
+    await within(music.setQueue({ songs: [ids[0]] }), 15000, 'Apple Music didn’t queue the song.')
+    await within(music.play(), 15000, 'Apple Music didn’t start playing.')
+    if (shuffle) music.shuffleMode = 1
+    await putBack(music, keep)
+    // The rest, without holding up the music. A newer start stops this one.
+    ;(async () => {
+      for (let i = 1; i < ids.length; i += PAGE_SIZE) {
+        if (run !== fillRun) return
+        try {
+          await within(music.playLater({ songs: ids.slice(i, i + PAGE_SIZE) }), 20000, 'slow')
+        } catch (_) {
+          return
+        }
+      }
+    })()
+  }
+
+  // What to play for a picked song, Play or Shuffle, following Apple's own
+  // rules: a picked song plays first, then the rest of the playlist after it
+  // (or all the others shuffled when shuffle is on).
+  function orderFor(tracks, action, shuffleOn) {
+    if (action.kind === 'shuffle') return { order: shuffled(tracks), shuffle: true }
+    if (action.kind === 'play') return { order: shuffleOn ? shuffled(tracks) : tracks, shuffle: shuffleOn }
+    const picked = tracks[action.index]
+    if (!picked) return null
+    if (shuffleOn) return { order: [picked].concat(shuffled(tracks.filter((track) => track !== picked))), shuffle: true }
+    return { order: tracks.slice(action.index), shuffle: false }
+  }
+
+  // Fast when the list is loaded, Apple's own (slower) way otherwise or if
+  // the fast way fails.
+  async function play(playlist, action) {
+    const music = musicKit()
+    if (!music) throw new Error('Apple Music is still starting up.')
+    const entry = cache.get(playlist.id)
+    const shuffleOn = !!music.shuffleMode
+    const plan = entry && entry.done ? orderFor(entry.tracks, action, shuffleOn) : null
+    if (plan) {
+      try {
+        await startFast(plan.order, plan.shuffle)
+        return
+      } catch (error) {
+        console.warn('AppleCrap: fast start failed, using Apple’s own', error)
+      }
+    }
+    if (action.kind === 'row') {
+      const track = entry && entry.tracks[action.index]
+      if (!track) throw new Error('That song isn’t loaded yet.')
+      return playFrom(playlist, track)
+    }
+    const keep = pendingRequests(music)
+    music.shuffleMode = action.kind === 'shuffle' ? 1 : music.shuffleMode
+    await within(music.setQueue({ playlist: playlist.id }), 30000, 'Apple Music took too long to load the playlist.')
+    await within(music.play(), 15000, 'Apple Music didn’t start playing.')
+    await putBack(music, keep)
+  }
+
   async function playFrom(playlist, track) {
     const music = musicKit()
     if (!music) throw new Error('Apple Music is still starting up.')
@@ -194,13 +314,7 @@
     } finally {
       if (shuffle) music.shuffleMode = shuffle
     }
-    if (keep.length) {
-      try {
-        await music.playNext({ songs: keep })
-      } catch (_) {
-        for (const id of keep.reverse()) await music.playNext({ song: id })
-      }
-    }
+    await putBack(music, keep)
   }
 
   async function playNext(track) {
@@ -361,7 +475,7 @@
           (count > MAX_SHOWN ? ` (first ${MAX_SHOWN} shown)` : '')
       return entry.done || !entry.loading
         ? found
-        : `${found} · loading ${entry.tracks.length.toLocaleString()} of ${entry.total.toLocaleString()}…`
+        : `${found} · loading ${(entry.loadedCount || entry.tracks.length).toLocaleString()} of ${entry.total.toLocaleString()}…`
     }
 
     function render() {
@@ -415,7 +529,7 @@
           status.textContent = `“${track.title}” will play next.`
         } else {
           status.textContent = `Starting “${track.title}”…`
-          await playFrom(playlist, track)
+          await play(playlist, { kind: 'row', index: track.index })
           input.blur()
           showPanel(false)
         }
@@ -483,18 +597,70 @@
       true,
     )
 
+    // Apple's own Shuffle and Play buttons, and a song row's play button or a
+    // double-click on it, start through the fast path once this playlist's
+    // songs are loaded. Anything else (or a row that doesn't line up with the
+    // loaded list) is left to Apple.
+    const pageAction = (event) => {
+      const here = currentPlaylist()
+      const entry = here && cache.get(here.id)
+      if (!entry || !entry.done || !entry.tracks.length || !event.target.closest) return null
+      const row = event.target.closest('[data-testid="track-list-item"][data-row]')
+      const button = event.target.closest('button')
+      if (button && button.closest('[data-testid="container-detail-header"]')) {
+        const label = (button.getAttribute('aria-label') || button.textContent || '').trim().toLowerCase()
+        if (label === 'shuffle') return { here, action: { kind: 'shuffle' } }
+        if (label === 'play') return { here, action: { kind: 'play' } }
+        return null
+      }
+      if (!row || !row.closest('[data-testid="tracklist"]')) return null
+      if (event.type === 'click' && !(button && button.matches('[data-testid="play-button"]'))) return null
+      const index = Number(row.getAttribute('data-row'))
+      const track = entry.tracks[index]
+      const label = fold(row.getAttribute('aria-label') || row.textContent || '')
+      if (!track || !label.includes(fold(track.title))) return null
+      return { here, action: { kind: 'row', index } }
+    }
+    const takeOver = (event) => {
+      const hit = pageAction(event)
+      if (!hit) return
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      play(hit.here, hit.action).catch((error) => console.warn('AppleCrap: couldn’t start playback', error))
+    }
+    document.addEventListener('click', takeOver, true)
+    document.addEventListener('dblclick', takeOver, true)
+
     // Show only on playlist pages; Apple's site changes pages without loading.
+    // Opening one starts loading its songs, so they're ready for the box and
+    // for a fast Play or Shuffle.
     let lastPath = ''
     const sync = () => {
       if (location.pathname === lastPath) return
       lastPath = location.pathname
-      const onPlaylist = !!currentPlaylist()
-      box.hidden = !onPlaylist
+      const here = currentPlaylist()
+      box.hidden = !here
       input.value = ''
       matches = []
       showPanel(false)
       playlist = null
-      if (onPlaylist) place()
+      if (here) {
+        place()
+        preload(here, 0)
+      }
+    }
+    // Right after the app starts, MusicKit may not be ready yet; try again.
+    const preload = (here, attempt) => {
+      if (currentPlaylist() === null || currentPlaylist().id !== here.id) return
+      const music = musicKit()
+      if (!music || !music.api || typeof music.api.music !== 'function') {
+        if (attempt < 30) setTimeout(() => preload(here, attempt + 1), 1000)
+        return
+      }
+      load(here, () => {
+        if (playlist && playlist.id === here.id) render()
+      }).catch(() => {})
     }
     sync()
     window.addEventListener('applecrap-nav-placed', place)
