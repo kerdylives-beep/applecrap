@@ -279,8 +279,14 @@ impl AppContext {
         }
 
         if let Some(error) = should_log_error {
-            self.add_log(LogLevel::Warn, format!("Now Playing unavailable: {error}"))
-                .await;
+            // An audio output problem reads as itself; anything else means
+            // the app can't tell what's playing.
+            let line = if error.starts_with(crate::services::player_bridge::AUDIO_OUTPUT_PREFIX) {
+                error
+            } else {
+                format!("Now Playing unavailable: {error}")
+            };
+            self.add_log(LogLevel::Warn, line).await;
         }
 
         if let Some(devices) = should_log_devices {
