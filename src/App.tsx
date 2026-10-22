@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AlertStack, Nav, TitleBar } from './components/Chrome'
 import { Desk } from './components/Desk'
+import { Listen } from './components/Listen'
 import { Activity, FirstRun, Help, Overlay } from './components/Pages'
 import { Setup } from './components/Setup'
 import type { AppState } from './types'
@@ -8,24 +9,38 @@ import s from './ui.module.css'
 import { useAppStore, type AppStore } from './useAppStore'
 
 const SETUP_SKIPPED_KEY = 'applecrap.firstRunDone'
+const LISTEN_UNLOCKED_KEY = 'applecrap.listenUnlocked'
 
 // A brand-new install: no way to reach Twitch chat has been set up yet.
 function needsSetup(state: AppState) {
   return !state.auth.broadcaster && !state.auth.bot && !state.settings.twitch.oauthToken
 }
 
-function readSetupDone() {
+function readFlag(key: string) {
   try {
-    return window.localStorage.getItem(SETUP_SKIPPED_KEY) === '1'
+    return window.localStorage.getItem(key) === '1'
   } catch {
     return false
   }
 }
 
 function Main({ store, state }: { store: AppStore; state: AppState }) {
+  // Listen together hides until the apple is clicked three times. Once
+  // found, it stays.
+  const [listenUnlocked, setListenUnlocked] = useState(() => readFlag(LISTEN_UNLOCKED_KEY) || state.listen.phase !== 'off')
+  const unlockListen = () => {
+    try {
+      window.localStorage.setItem(LISTEN_UNLOCKED_KEY, '1')
+    } catch {
+      // Private storage unavailable: it hides again next time.
+    }
+    setListenUnlocked(true)
+    store.setView('listen')
+  }
+
   // Decided once, when the app opens: finishing a step mid-setup mustn't
   // yank the guide away.
-  const [firstRun, setFirstRun] = useState(() => needsSetup(state) && !readSetupDone())
+  const [firstRun, setFirstRun] = useState(() => needsSetup(state) && !readFlag(SETUP_SKIPPED_KEY))
   const finishFirstRun = () => {
     try {
       window.localStorage.setItem(SETUP_SKIPPED_KEY, '1')
@@ -53,6 +68,9 @@ function Main({ store, state }: { store: AppStore; state: AppState }) {
       case 'help':
         page = <Help store={store} state={state} />
         break
+      case 'listen':
+        page = <Listen store={store} state={state} />
+        break
       default:
         page = <Desk store={store} state={state} />
     }
@@ -60,7 +78,13 @@ function Main({ store, state }: { store: AppStore; state: AppState }) {
 
   return (
     <div className={s.app}>
-      <TitleBar state={state} />
+      <TitleBar
+        state={state}
+        onSecret={() => {
+          setFirstRun(false)
+          unlockListen()
+        }}
+      />
       <Nav
         view={firstRun ? 'desk' : store.view}
         onView={(view) => {
@@ -68,6 +92,7 @@ function Main({ store, state }: { store: AppStore; state: AppState }) {
           store.setView(view)
         }}
         onShowPlayer={store.showPlayer}
+        showListen={listenUnlocked}
       />
       <main className={s.content}>
         <AlertStack store={store} state={state} />

@@ -604,6 +604,72 @@ async fn event_worker(
     }
 }
 
+// --- Follower (Listen together) -------------------------------------------------
+
+/// What a channel follower reports.
+pub enum FollowEvent {
+    Connected,
+    Retrying(String),
+    Chat(ChatMessage),
+}
+
+/// Reads a channel's chat without signing in (Twitch's anonymous read-only
+/// login) and forwards it, reconnecting with backoff until the task is
+/// aborted or `events` is dropped.
+pub async fn follow_channel(channel: String, events: mpsc::Sender<FollowEvent>) {
+    let identity = ChatIdentity {
+        login: format!("justinfan{}", 10_000 + uuid::Uuid::new_v4().as_u128() % 80_000),
+        password: "SCHMOOPIIE".to_string(),
+        slot: None,
+    };
+    // Nothing is ever written to chat; the sender only keeps the session
+    // loop's outbound channel open.
+    let (_outbound_tx, mut outbound_rx) = mpsc::unbounded_channel::<Outbound>();
+    let (session_tx, mut session_rx) = mpsc::channel::<SessionEvent>(CHAT_EVENT_CAPACITY);
+    let forward = events.clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = session_rx.recv().await {
+            let event = match event {
+                SessionEvent::Welcome => FollowEvent::Connected,
+                SessionEvent::Chat(message) => FollowEvent::Chat(message),
+            };
+            if forward.send(event).await.is_err() {
+                return;
+            }
+        }
+    });
+
+    let mut attempt: u32 = 0;
+    loop {
+        let outcome = match open_stream().await {
+            Ok(stream) => {
+                session_loop(stream, &identity, &channel, &mut outbound_rx, &session_tx, Timing::LIVE).await
+            }
+            Err(error) => SessionOutcome {
+                end: SessionEnd::Io(error.to_string()),
+                welcomed: false,
+            },
+        };
+        if outcome.welcomed {
+            attempt = 0;
+        }
+        let reason = match outcome.end {
+            SessionEnd::Reconnect => continue,
+            SessionEnd::AuthFailed(message) => message,
+            SessionEnd::Closed => "Twitch closed the connection".to_string(),
+            SessionEnd::Stale => "Twitch stopped responding".to_string(),
+            SessionEnd::Io(error) => format!("Connection problem: {error}"),
+        };
+        attempt = attempt.saturating_add(1);
+        let delay = backoff_delay(attempt);
+        let message = format!("{reason}. Retrying in {}s.", delay.as_secs());
+        if events.send(FollowEvent::Retrying(message)).await.is_err() {
+            return;
+        }
+        tokio::time::sleep(delay).await;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ChatMessage {
     pub login: String,
@@ -692,6 +758,10 @@ async fn handle_chat_command(context: &Arc<AppContext>, message: &ChatMessage) -
                 .await;
             Some(reply)
         }
+        "!listen" => Some(listen_reply(
+            settings.twitch.announce_songs,
+            &settings.twitch.channel,
+        )),
         "!skip" => {
             if !message.is_mod_or_broadcaster {
                 context
@@ -761,6 +831,18 @@ fn format_skip_reply(probe: &ProbeSnapshot) -> String {
         Some(title) => format!("Skipped {title}."),
         None => "Skipped.".to_string(),
     }
+}
+
+/// How viewers join Listen together. It needs the "Now playing" posts on.
+fn listen_reply(announcing: bool, channel: &str) -> String {
+    if !announcing {
+        return "Listen together is off right now.".to_string();
+    }
+    let channel = channel.trim().trim_start_matches('#').to_lowercase();
+    format!(
+        "Listen along in full quality with your own Apple Music: get AppleCrap (github.com/kerdylives-beep/applecrap), \
+         click the apple at the top left 3 times, then enter {channel} in the Listen tab."
+    )
 }
 
 fn privmsg_from(parsed: &irc::IrcMessage) -> Option<ChatMessage> {
@@ -984,5 +1066,11 @@ mod tests {
     fn broadcaster_badge_match_is_exact() {
         let parsed = irc::parse("@badges=notbroadcaster/1;mod=0 :v!v@v PRIVMSG #c :hi").unwrap();
         assert!(!privmsg_from(&parsed).unwrap().is_mod_or_broadcaster);
+    }
+
+    #[test]
+    fn listen_reply_names_the_channel_only_when_announcing() {
+        assert!(listen_reply(true, "#Streamer").contains("enter streamer in the Listen tab"));
+        assert_eq!(listen_reply(false, "streamer"), "Listen together is off right now.");
     }
 }

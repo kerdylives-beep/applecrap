@@ -301,3 +301,27 @@ pub async fn player_control(
 ) -> Result<crate::models::CommandResult, String> {
     Ok(context.player_control(&op).await)
 }
+
+#[tauri::command]
+pub async fn listen_start(
+    channel: String,
+    delay_ms: u64,
+    context: State<'_, Arc<AppContext>>,
+) -> Result<crate::models::AppState, String> {
+    Ok(context.listen_start(&channel, delay_ms).await)
+}
+
+#[tauri::command]
+pub async fn listen_stop(
+    context: State<'_, Arc<AppContext>>,
+) -> Result<crate::models::AppState, String> {
+    Ok(context.listen_stop().await)
+}
+
+#[tauri::command]
+pub async fn listen_set_delay(
+    delay_ms: u64,
+    context: State<'_, Arc<AppContext>>,
+) -> Result<crate::models::AppState, String> {
+    Ok(context.listen_set_delay(delay_ms).await)
+}

@@ -198,7 +198,10 @@ pub fn run() {
             sign_out_twitch,
             dismiss_alert,
             report_problem,
-            player_control
+            player_control,
+            listen_start,
+            listen_stop,
+            listen_set_delay
         ])
         .build(tauri::generate_context!())
         .expect("error while building AppleCrap")

@@ -430,6 +430,33 @@
             }
             return done(true, 'unsupported: the player queue cannot remove items')
           }
+          case 'listenPlay': {
+            // Listen together: play the stream's song, positioned as if it
+            // had started at startAtMs (this PC's clock). Seeking happens
+            // after playback starts, so load time doesn't throw it off.
+            const { song, startAtMs } = JSON.parse(id)
+            const item = music.nowPlayingItem
+            const params = (item && item.attributes && item.attributes.playParams) || (item && item.playParams) || {}
+            const current = String(params.catalogId || (item && item.id) || '')
+            if (current !== String(song)) {
+              await music.setQueue({ song: String(song) })
+            }
+            if (!isPlaying(music)) {
+              await music.play()
+            }
+            for (let waited = 0; !isPlaying(music) && waited < 3500; waited += 100) {
+              await new Promise((resolve) => setTimeout(resolve, 100))
+            }
+            const at = (Date.now() - Number(startAtMs)) / 1000
+            if (at > 0.5 && typeof music.seekToTime === 'function') {
+              await music.seekToTime(at)
+            }
+            if (!isPlaying(music)) {
+              return done(false, "The song didn't start; press play in the player.")
+            }
+            const now = typeof music.currentPlaybackTime === 'number' ? music.currentPlaybackTime : 0
+            return done(true, 'at ' + now.toFixed(1) + 's (aimed for ' + Math.max(0, at).toFixed(1) + 's)')
+          }
           case 'queueLater':
             await music.playLater({ song: id })
             return done(true, 'Queued at the end of Playing Next.')

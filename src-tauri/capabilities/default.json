@@ -36,6 +36,9 @@
     "allow-sign-out-twitch",
     "allow-dismiss-alert",
     "allow-report-problem",
-    "allow-player-control"
+    "allow-player-control",
+    "allow-listen-start",
+    "allow-listen-stop",
+    "allow-listen-set-delay"
   ]
 }

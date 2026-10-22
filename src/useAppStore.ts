@@ -15,6 +15,9 @@ import {
   exportDiagnostics,
   importLegacyState,
   installUpdate as installUpdateCommand,
+  listenSetDelay,
+  listenStart,
+  listenStop,
   openOverlayPreview as openOverlayPreviewCommand,
   openTwitchSignInPage,
   playerControl as playerControlCommand,
@@ -530,6 +533,31 @@ export function useAppStore() {
     void showPlayerCommand()
   }
 
+  // --- Listen together ------------------------------------------------------
+
+  const startListening = async (channel: string, delayMs: number) => {
+    const nextState = await runAction('listen-start', () => listenStart(channel, delayMs))
+    if (nextState) {
+      adoptState(nextState)
+    }
+  }
+
+  const stopListening = async () => {
+    const nextState = await runAction('listen-stop', listenStop)
+    if (nextState) {
+      adoptState(nextState)
+    }
+  }
+
+  // Not a busy action: it runs while the slider moves.
+  const setListenDelay = async (delayMs: number) => {
+    try {
+      adoptState(await listenSetDelay(delayMs))
+    } catch (error) {
+      setNotice(errorMessage(error))
+    }
+  }
+
   // --- Help, alerts, updates --------------------------------------------------
 
   const dismissAlert = async (id: string) => {
@@ -662,6 +690,9 @@ export function useAppStore() {
     dispatchFeaturedRequest,
     playerControl,
     showPlayer,
+    startListening,
+    stopListening,
+    setListenDelay,
     dismissAlert,
     reportProblem,
     copyDebugSummary,
