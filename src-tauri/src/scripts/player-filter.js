@@ -216,18 +216,38 @@
     }
   }
 
+  // True once the player is playing (or loading) the expected song.
+  async function startedPlaying(music, id) {
+    for (let waited = 0; waited < 4000; waited += 200) {
+      const item = music.queue && music.queue.currentItem
+      const state = music.playbackState
+      // MusicKit states: 1 loading, 2 playing, 8 waiting, 9 stalled.
+      if (item && idsOf(item).includes(String(id)) && [1, 2, 8, 9].includes(state)) return true
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    }
+    return false
+  }
+
   // Plays `order` (tracks) from its first song. `shuffle` only sets the
   // player's shuffle indicator: the order is already shuffled when it's on.
   async function startFast(order, shuffle) {
     const music = musicKit()
     if (!music) throw new Error('Apple Music is still starting up.')
-    const ids = order.map((track) => track.id).filter(Boolean)
-    if (!ids.length) throw new Error('No songs to play.')
+    // Library songs ("i.…") don't queue this way, so use their Apple Music
+    // catalog ids; songs with none (your own uploads) are skipped here.
+    const ids = order.map((track) => track.catalogId).filter(Boolean)
+    if (!ids.length || ids[0] !== order[0].catalogId) throw new Error('No catalog id for the first song.')
     const keep = pendingRequests(music)
     const run = ++fillRun
+    const shuffleBefore = music.shuffleMode
     music.shuffleMode = 0
     await within(music.setQueue({ songs: [ids[0]] }), 15000, 'Apple Music didn’t queue the song.')
     await within(music.play(), 15000, 'Apple Music didn’t start playing.')
+    // Apple can accept a queue it then doesn't play; check it really started.
+    if (!(await startedPlaying(music, ids[0]))) {
+      music.shuffleMode = shuffleBefore
+      throw new Error('The fast start didn’t play.')
+    }
     if (shuffle) music.shuffleMode = 1
     await putBack(music, keep)
     // The rest, without holding up the music. A newer start stops this one.
