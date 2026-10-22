@@ -337,6 +337,9 @@
         switch (op) {
           case 'queueNext':
             await music.playNext({ song: id })
+            // Remembered so anything that replaces the player's queue (the
+            // playlist filter's "play from here") can put requests back.
+            ;(window.__applecrapQueued = window.__applecrapQueued || new Set()).add(String(id))
             if (!isPlaying(music)) {
               try {
                 await music.play()

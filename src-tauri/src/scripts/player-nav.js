@@ -180,6 +180,10 @@
       if (!spot) return
       pill.style.left = Math.round(spot.left) + 'px'
       pill.style.top = Math.round(spot.top) + 'px'
+      // The playlist filter (player-filter.js) lines up beside the pill.
+      const box = pill.getBoundingClientRect()
+      window.__applecrapNavBox = { left: box.left, top: box.top, right: box.right, height: box.height }
+      window.dispatchEvent(new Event('applecrap-nav-placed'))
     }
     place()
     window.addEventListener('resize', place)

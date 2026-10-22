@@ -72,7 +72,9 @@ pub fn run() {
                 .initialization_script(include_str!("scripts/player-bridge.js"))
                 // Back/Forward buttons and shortcuts: the window has no
                 // browser toolbar.
-                .initialization_script(include_str!("scripts/player-nav.js"));
+                .initialization_script(include_str!("scripts/player-nav.js"))
+                // A Filter box for playlists, which the web player lacks.
+                .initialization_script(include_str!("scripts/player-filter.js"));
 
                 // wry builds a separate WebView2 environment per webview, and
                 // WebView2 refuses to create a second environment for the same
