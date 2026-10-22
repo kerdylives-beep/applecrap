@@ -45,6 +45,7 @@ export type AppSettings = {
     oauthToken: string
     requestCommand: string
     autoConnect: boolean
+    announceSongs: boolean
   }
   requestLimits: {
     maxQueueSize: number

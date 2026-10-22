@@ -24,6 +24,7 @@ impl AppContext {
         self.set_probe_snapshot(snapshot.clone(), session_signature)
             .await;
         self.note_player_status(&snapshot.status).await;
+        self.announce_if_new_song(&snapshot, top_item.as_ref()).await;
 
         // A request removed after it reached the player: skip it the moment
         // it starts, when the player couldn't take it out of its queue.

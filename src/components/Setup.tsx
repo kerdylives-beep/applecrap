@@ -217,6 +217,10 @@ export function Setup({ store, state }: { store: AppStore; state: AppState }) {
           <input type="checkbox" checked={draft.twitch.autoConnect} onChange={(event) => store.updateDraft('twitch', { autoConnect: event.target.checked })} />
           Connect to chat when AppleCrap opens
         </label>
+        <label className={s.check}>
+          <input type="checkbox" checked={draft.twitch.announceSongs} onChange={(event) => store.updateDraft('twitch', { announceSongs: event.target.checked })} />
+          Post each new song in chat (&ldquo;Now playing: &hellip;&rdquo;, with an Apple Music link)
+        </label>
         {state.auth.available && !signedIn && !state.settings.twitch.oauthToken ? (
           <label className={s.check}>
             <input type="checkbox" checked={pastedToken} onChange={(event) => setPastedToken(event.target.checked)} />

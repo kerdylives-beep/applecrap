@@ -36,6 +36,7 @@ use crate::{
     },
 };
 
+mod announce;
 mod auth;
 mod channel_points;
 mod health;
@@ -105,6 +106,9 @@ struct RuntimeState {
     /// playback removes the item from the queue, and the overlay still wants
     /// to credit whoever asked for it.
     now_playing_request: Option<QueueItem>,
+    /// The song last announced in chat (catalog id, or title and artist), so
+    /// each song is announced once.
+    last_announced: Option<String>,
     pending_sign_in: Option<crate::models::PendingSignIn>,
     auth_error: Option<String>,
     channel_points_status: crate::models::ChannelPointsStatus,
@@ -180,6 +184,7 @@ impl AppContext {
                 update: None,
                 media_keys_claimed: false,
                 now_playing_request: None,
+                last_announced: None,
                 pending_sign_in: None,
                 auth_error: None,
                 channel_points_status: Default::default(),

@@ -113,6 +113,10 @@ pub struct TwitchSettings {
     pub oauth_token: String,
     pub request_command: String,
     pub auto_connect: bool,
+    /// Post "Now playing: …" in chat when a song starts. Listen together
+    /// reads these posts to follow the stream's music.
+    #[serde(default)]
+    pub announce_songs: bool,
 }
 
 impl Default for TwitchSettings {
@@ -123,6 +127,7 @@ impl Default for TwitchSettings {
             oauth_token: String::new(),
             request_command: "!request".to_string(),
             auto_connect: false,
+            announce_songs: false,
         }
     }
 }
@@ -436,6 +441,10 @@ pub struct ProbeSnapshot {
     pub duration_ms: Option<i64>,
     #[serde(default)]
     pub position_ms: Option<i64>,
+    /// Apple Music catalog id of the playing song, when the player knows it
+    /// (library-only uploads have none).
+    #[serde(default)]
+    pub catalog_id: Option<String>,
 }
 
 impl Default for ProbeSnapshot {
@@ -460,6 +469,7 @@ impl Default for ProbeSnapshot {
             bitrate: None,
             duration_ms: None,
             position_ms: None,
+            catalog_id: None,
         }
     }
 }
@@ -678,6 +688,7 @@ pub struct TwitchSettingsPatch {
     pub oauth_token: Option<String>,
     pub request_command: Option<String>,
     pub auto_connect: Option<bool>,
+    pub announce_songs: Option<bool>,
 }
 
 #[derive(Clone, Deserialize, Debug, Default)]
@@ -800,6 +811,9 @@ impl AppSettings {
             }
             if let Some(auto_connect) = twitch.auto_connect {
                 self.twitch.auto_connect = auto_connect;
+            }
+            if let Some(announce_songs) = twitch.announce_songs {
+                self.twitch.announce_songs = announce_songs;
             }
         }
 
