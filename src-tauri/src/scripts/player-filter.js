@@ -42,6 +42,15 @@
       .normalize('NFD')
       .replace(/[̀-ͯ]/g, '')
       .toLowerCase()
+  // Words without accents or punctuation; "T-Pain" also counts as "tpain".
+  const words = (text) => {
+    const raw = fold(text).replace(/['’]/g, '').split(/[^a-z0-9]+/).filter(Boolean)
+    const joined = fold(text)
+      .split(/\s+/)
+      .map((chunk) => chunk.replace(/[^a-z0-9]/g, ''))
+      .filter((chunk) => chunk && !raw.includes(chunk))
+    return raw.concat(joined)
+  }
 
   function toTrack(item, index) {
     const a = item.attributes || {}
@@ -54,8 +63,9 @@
       artist: a.artistName || '',
       album: a.albumName || '',
       ms: a.durationInMillis || 0,
-      haystack: fold([a.name, a.artistName, a.albumName].join('  ')),
-      titleKey: fold(a.name),
+      words: words([a.name, a.artistName, a.albumName].join(' ')),
+      titleWords: words(a.name),
+      titleKey: words(a.name).join(' '),
     }
   }
 
@@ -95,21 +105,35 @@
     return entry
   }
 
-  // Every word must appear somewhere in the title, artist or album. Titles
-  // that start with the words rank first.
+  // Every typed word must start a word in the title, artist or album ("cha"
+  // finds "Cha Cha Cha" but not "Michaels"). Order: titles that begin with
+  // what was typed, titles containing it, titles holding all the words, then
+  // the rest, each in playlist order.
   function search(tracks, query) {
-    const words = fold(query).split(/\s+/).filter(Boolean)
-    if (!words.length) return []
-    const joined = words.join(' ')
-    const hits = tracks.filter((track) => words.every((word) => track.haystack.includes(word)))
+    const typed = words(query)
+    if (!typed.length) return []
+    const phrase = typed.join(' ')
+    const startsAWord = (list, word) => list.some((candidate) => candidate.startsWith(word))
+    const hits = tracks.filter((track) => typed.every((word) => startsAWord(track.words, word)))
     const rank = (track) =>
-      track.titleKey.startsWith(joined) ? 0 : track.titleKey.includes(joined) ? 1 : 2
+      track.titleKey.startsWith(phrase)
+        ? 0
+        : (' ' + track.titleKey).includes(' ' + phrase)
+          ? 1
+          : typed.every((word) => startsAWord(track.titleWords, word))
+            ? 2
+            : 3
     return hits.sort((left, right) => rank(left) - rank(right) || left.index - right.index)
   }
 
   const idOf = (item) => {
     const params = (item && item.attributes && item.attributes.playParams) || (item && item.playParams) || {}
     return String(params.catalogId || params.id || (item && item.id) || '')
+  }
+  // Every id a queue item can be known by (library "i.…", catalog number).
+  const idsOf = (item) => {
+    const params = (item && item.attributes && item.attributes.playParams) || (item && item.playParams) || {}
+    return [item && item.id, params.id, params.catalogId].filter(Boolean).map(String)
   }
 
   // Requests AppleCrap handed to the player that are still waiting to play.
@@ -130,6 +154,14 @@
     if (!music) return
     const keep = pendingRequests(music)
     await music.setQueue({ playlist: playlist.id, startWith: track.index })
+    // The position alone isn't enough: with shuffle on the queue comes back
+    // shuffled, and songs that can't play are left out. Find the song itself.
+    const want = [track.id, track.catalogId].filter(Boolean)
+    const items = (music.queue && music.queue.items) || []
+    const at = items.findIndex((item) => idsOf(item).some((id) => want.includes(id)))
+    if (at >= 0 && at !== music.queue.position && typeof music.changeToMediaAtIndex === 'function') {
+      await music.changeToMediaAtIndex(at)
+    }
     await music.play()
     if (keep.length) {
       try {
