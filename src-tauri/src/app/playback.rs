@@ -24,6 +24,9 @@ impl AppContext {
         self.set_probe_snapshot(snapshot.clone(), session_signature)
             .await;
         self.note_player_status(&snapshot.status).await;
+        for note in self.player_bridge.take_notes().await {
+            self.add_log(LogLevel::Info, format!("Player: {note}")).await;
+        }
 
         // A request removed after it reached the player: skip it the moment
         // it starts, when the player couldn't take it out of its queue.

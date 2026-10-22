@@ -71,7 +71,12 @@ enum BridgeReport {
         #[serde(default)]
         detail: String,
     },
+    /// A line for the Activity log (the playlist tools report what they did).
+    Note { message: String },
 }
+
+/// Notes kept until the next probe cycle puts them in the Activity log.
+const MAX_NOTES: usize = 50;
 
 struct CommandOutcome {
     ok: bool,
@@ -83,6 +88,7 @@ pub struct PlayerBridge {
     pending: Mutex<HashMap<String, oneshot::Sender<CommandOutcome>>>,
     /// Removed requests the player couldn't take out of its own queue.
     withdrawn: Mutex<WithdrawnTracks>,
+    notes: Mutex<Vec<String>>,
 }
 
 impl PlayerBridge {
@@ -91,6 +97,7 @@ impl PlayerBridge {
             latest: RwLock::new(None),
             pending: Mutex::new(HashMap::new()),
             withdrawn: Mutex::new(WithdrawnTracks::default()),
+            notes: Mutex::new(Vec::new()),
         }
     }
 
@@ -107,8 +114,19 @@ impl PlayerBridge {
                     let _ = sender.send(CommandOutcome { ok, detail });
                 }
             }
+            Ok(BridgeReport::Note { message }) => {
+                let mut notes = self.notes.lock().await;
+                if notes.len() < MAX_NOTES {
+                    notes.push(message.chars().take(300).collect());
+                }
+            }
             Err(_) => {}
         }
+    }
+
+    /// Notes from the page since the last call.
+    pub async fn take_notes(&self) -> Vec<String> {
+        std::mem::take(&mut *self.notes.lock().await)
     }
 
     /// Fallback path: the bridge encodes reports into the window title when

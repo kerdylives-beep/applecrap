@@ -83,6 +83,10 @@ whole playlist, not just the songs Apple has loaded so far, by song, artist or a
 play the playlist from that song, or use its **Play Next** button to slot it in after the current song.
 Requests already waiting to play stay in place.
 
+Big playlists also start much faster: opening a playlist loads its song list in the background, so
+**Play**, **Shuffle** or a song's play button starts the music in a second or two instead of waiting
+for Apple to fetch every song first.
+
 The player window can stay hidden the whole time; while hidden it stops drawing entirely, so it costs almost nothing to leave running beside a game.
 
 **Audio quality:** playback runs at 256 kbps AAC, the highest the Apple Music web player offers, and

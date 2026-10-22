@@ -56,10 +56,13 @@
   function toTrack(item, index) {
     const a = item.attributes || {}
     const play = a.playParams || {}
+    const related = item.relationships && item.relationships.catalog && item.relationships.catalog.data
+    const catalogId =
+      play.catalogId || (related && related[0] && related[0].id) || (/^\d+$/.test(String(play.id || item.id)) ? play.id || item.id : '')
     return {
       index,
       id: String(play.id || item.id || ''),
-      catalogId: String(play.catalogId || ''),
+      catalogId: String(catalogId || ''),
       title: a.name || 'Untitled',
       artist: a.artistName || '',
       album: a.albumName || '',
@@ -80,6 +83,9 @@
       throw new Error('Apple Music is still starting up.')
     }
     const entry = { tracks: [], total: 0, done: false, at: Date.now(), loading: true, error: '' }
+    // Settles when loading ends either way, so a click made mid-load can wait.
+    let settle
+    entry.ready = new Promise((resolve) => (settle = resolve))
     cache.set(playlist.id, entry)
     const path = playlist.library
       ? `v1/me/library/playlists/${playlist.id}/tracks`
@@ -88,6 +94,7 @@
       const response = await music.api.music(path, { limit: PAGE_SIZE, offset })
       return (response && response.data) || {}
     }
+    const loadStarted = performance.now()
     try {
       // The first page says how many songs there are; the rest are fetched
       // several at a time (a 1,600-song playlist in about 2 s rather than 8).
@@ -122,13 +129,45 @@
           onProgress(entry)
         }
       }
+      // Some library songs come without their Apple Music catalog id, which
+      // a fast start needs. Look those up (a request per 100 songs).
+      let missing = 0
+      if (playlist.library) {
+        const lacking = entry.tracks.filter((track) => !track.catalogId && /^i\./.test(track.id))
+        for (let i = 0; i < lacking.length; i += PAGE_SIZE) {
+          const chunk = lacking.slice(i, i + PAGE_SIZE)
+          try {
+            const response = await music.api.music('v1/me/library/songs', {
+              ids: chunk.map((track) => track.id).join(','),
+              include: 'catalog',
+            })
+            const found = new Map()
+            for (const item of (response && response.data && response.data.data) || []) {
+              const related = item.relationships && item.relationships.catalog && item.relationships.catalog.data
+              if (related && related[0] && related[0].id) found.set(String(item.id), String(related[0].id))
+            }
+            chunk.forEach((track) => {
+              if (found.has(track.id)) track.catalogId = found.get(track.id)
+            })
+          } catch (_) {
+            /* those songs just can't start fast */
+          }
+        }
+        missing = entry.tracks.filter((track) => !track.catalogId).length
+      }
       entry.done = true
+      note(
+        `Loaded ${entry.tracks.length} songs in ${Math.round(performance.now() - loadStarted)} ms` +
+          (missing ? ` (${missing} without an Apple Music id)` : '') +
+          '.',
+      )
     } catch (error) {
       entry.error = (error && (error.message || error.errorCode)) || 'Couldn’t load the songs.'
       cache.delete(playlist.id)
     } finally {
       entry.loading = false
       onProgress(entry)
+      settle()
     }
     return entry
   }
@@ -198,6 +237,36 @@
 
   let fillRun = 0
 
+  // A line in AppleCrap's Activity log, so a fast start that falls back or a
+  // fill that stops is visible without developer tools.
+  function note(message) {
+    try {
+      const internals = window.__TAURI_INTERNALS__
+      if (internals && typeof internals.invoke === 'function') {
+        internals.invoke('player_bridge_report', { payload: { kind: 'note', message, at: Date.now() } }).catch(() => {})
+      }
+    } catch (_) {
+      /* the log is a nicety */
+    }
+  }
+  const reason = (error) => (error && (error.message || error.errorCode || String(error))) || 'unknown error'
+
+  // Adds songs to the end of the queue. A batch Apple rejects is split until
+  // the songs it can't take are found; those are skipped, not the rest.
+  async function addLater(music, ids, run) {
+    if (!ids.length || run !== fillRun) return { added: 0, skipped: 0 }
+    try {
+      await within(music.playLater({ songs: ids }), 20000, 'Apple Music was too slow adding songs.')
+      return { added: ids.length, skipped: 0 }
+    } catch (error) {
+      if (ids.length === 1) return { added: 0, skipped: 1, error }
+      const half = Math.ceil(ids.length / 2)
+      const left = await addLater(music, ids.slice(0, half), run)
+      const right = await addLater(music, ids.slice(half), run)
+      return { added: left.added + right.added, skipped: left.skipped + right.skipped, error: left.error || right.error || error }
+    }
+  }
+
   function shuffled(list) {
     const copy = list.slice()
     for (let i = copy.length - 1; i > 0; i--) {
@@ -239,6 +308,7 @@
     if (!ids.length || ids[0] !== order[0].catalogId) throw new Error('No catalog id for the first song.')
     const keep = pendingRequests(music)
     const run = ++fillRun
+    const started = performance.now()
     const shuffleBefore = music.shuffleMode
     music.shuffleMode = 0
     await within(music.setQueue({ songs: [ids[0]] }), 15000, 'Apple Music didn’t queue the song.')
@@ -250,16 +320,27 @@
     }
     if (shuffle) music.shuffleMode = 1
     await putBack(music, keep)
+    const playingAfter = Math.round(performance.now() - started)
+    const uploads = order.length - ids.length
     // The rest, without holding up the music. A newer start stops this one.
     ;(async () => {
+      let added = 0
+      let skipped = 0
+      let lastError = null
       for (let i = 1; i < ids.length; i += PAGE_SIZE) {
         if (run !== fillRun) return
-        try {
-          await within(music.playLater({ songs: ids.slice(i, i + PAGE_SIZE) }), 20000, 'slow')
-        } catch (_) {
-          return
-        }
+        const result = await addLater(music, ids.slice(i, i + PAGE_SIZE), run)
+        added += result.added
+        skipped += result.skipped
+        lastError = result.error || lastError
       }
+      if (run !== fillRun) return
+      note(
+        `Fast start: playing after ${playingAfter} ms; ${added} more songs queued` +
+          (skipped ? `, ${skipped} skipped (${reason(lastError)})` : '') +
+          (uploads ? `, ${uploads} without an Apple Music id left out` : '') +
+          '.',
+      )
     })()
   }
 
@@ -288,7 +369,7 @@
         await startFast(plan.order, plan.shuffle)
         return
       } catch (error) {
-        console.warn('AppleCrap: fast start failed, using Apple’s own', error)
+        note(`Fast start didn’t work (${reason(error)}); used Apple’s own start instead.`)
       }
     }
     if (action.kind === 'row') {
@@ -624,7 +705,17 @@
     const pageAction = (event) => {
       const here = currentPlaylist()
       const entry = here && cache.get(here.id)
-      if (!entry || !entry.done || !entry.tracks.length || !event.target.closest) return null
+      if (!entry || !event.target.closest) return null
+      // Mid-load: Play and Shuffle wait for the list (it beats Apple's own
+      // load); rows need the list to check the song, so they're left to Apple.
+      if (!entry.done) {
+        const button = entry.loading && event.target.closest('button')
+        if (!button || !button.closest('[data-testid="container-detail-header"]')) return null
+        const label = (button.getAttribute('aria-label') || button.textContent || '').trim().toLowerCase()
+        if (label !== 'shuffle' && label !== 'play') return null
+        return { here, action: { kind: label }, wait: entry.ready }
+      }
+      if (!entry.tracks.length) return null
       const row = event.target.closest('[data-testid="track-list-item"][data-row]')
       const button = event.target.closest('button')
       if (button && button.closest('[data-testid="container-detail-header"]')) {
@@ -647,7 +738,9 @@
       event.preventDefault()
       event.stopPropagation()
       event.stopImmediatePropagation()
-      play(hit.here, hit.action).catch((error) => console.warn('AppleCrap: couldn’t start playback', error))
+      Promise.resolve(hit.wait)
+        .then(() => play(hit.here, hit.action))
+        .catch((error) => note(`Couldn’t start playback: ${reason(error)}`))
     }
     document.addEventListener('click', takeOver, true)
     document.addEventListener('dblclick', takeOver, true)
