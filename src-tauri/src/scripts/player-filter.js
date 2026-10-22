@@ -106,24 +106,31 @@
   }
 
   // Every typed word must start a word in the title, artist or album ("cha"
-  // finds "Cha Cha Cha" but not "Michaels"). Order: titles that begin with
-  // what was typed, titles containing it, titles holding all the words, then
-  // the rest, each in playlist order.
+  // finds "Cha Cha Cha" but not "Michaels"). Best first: titles that begin
+  // with what was typed, then titles containing it, then whole-word matches
+  // in the title ("Cha Cha") before partial ones ("Chardonnay"), then
+  // matches in the artist or album; ties keep playlist order.
   function search(tracks, query) {
     const typed = words(query)
     if (!typed.length) return []
     const phrase = typed.join(' ')
     const startsAWord = (list, word) => list.some((candidate) => candidate.startsWith(word))
     const hits = tracks.filter((track) => typed.every((word) => startsAWord(track.words, word)))
-    const rank = (track) =>
-      track.titleKey.startsWith(phrase)
-        ? 0
-        : (' ' + track.titleKey).includes(' ' + phrase)
-          ? 1
-          : typed.every((word) => startsAWord(track.titleWords, word))
-            ? 2
-            : 3
-    return hits.sort((left, right) => rank(left) - rank(right) || left.index - right.index)
+    const score = (track) => {
+      let points = 0
+      if (track.titleKey.startsWith(phrase)) points += 1000
+      else if ((' ' + track.titleKey).includes(' ' + phrase)) points += 500
+      for (const word of typed) {
+        if (track.titleWords.includes(word)) points += 20
+        else if (startsAWord(track.titleWords, word)) points += 10
+        else if (track.words.includes(word)) points += 5
+        else points += 2
+      }
+      return points
+    }
+    const scored = hits.map((track) => ({ track, points: score(track) }))
+    scored.sort((left, right) => right.points - left.points || left.track.index - right.track.index)
+    return scored.map((entry) => entry.track)
   }
 
   const idOf = (item) => {
@@ -149,20 +156,41 @@
       .filter((id) => queued.has(id))
   }
 
+  // A MusicKit call that never settles must not leave the box hanging.
+  const within = (promise, ms, message) =>
+    Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))])
+
   async function playFrom(playlist, track) {
     const music = musicKit()
-    if (!music) return
+    if (!music) throw new Error('Apple Music is still starting up.')
     const keep = pendingRequests(music)
-    await music.setQueue({ playlist: playlist.id, startWith: track.index })
-    // The position alone isn't enough: with shuffle on the queue comes back
-    // shuffled, and songs that can't play are left out. Find the song itself.
     const want = [track.id, track.catalogId].filter(Boolean)
-    const items = (music.queue && music.queue.items) || []
-    const at = items.findIndex((item) => idsOf(item).some((id) => want.includes(id)))
-    if (at >= 0 && at !== music.queue.position && typeof music.changeToMediaAtIndex === 'function') {
-      await music.changeToMediaAtIndex(at)
+    const isWanted = (item) => !!item && idsOf(item).some((id) => want.includes(id))
+
+    // Shuffle reorders the queue setQueue builds, so "start at song N" would
+    // land on a random song. Load it in order, then shuffle the rest again,
+    // the way Apple's desktop app plays a picked song first.
+    const shuffle = music.shuffleMode
+    if (shuffle) music.shuffleMode = 0
+    try {
+      await within(
+        music.setQueue({ playlist: playlist.id, startWith: track.index }),
+        20000,
+        'Apple Music took too long to load the playlist.',
+      )
+      await within(music.play(), 15000, 'Apple Music didn’t start playing.')
+      // Songs that can't play are left out of the queue, which shifts the
+      // positions; if it isn't the picked song, find the song itself.
+      if (!isWanted(music.queue && music.queue.currentItem)) {
+        const items = (music.queue && music.queue.items) || []
+        const at = items.findIndex(isWanted)
+        if (at >= 0 && typeof music.changeToMediaAtIndex === 'function') {
+          await within(music.changeToMediaAtIndex(at), 15000, 'Apple Music didn’t switch to the song.')
+        }
+      }
+    } finally {
+      if (shuffle) music.shuffleMode = shuffle
     }
-    await music.play()
     if (keep.length) {
       try {
         await music.playNext({ songs: keep })
@@ -174,8 +202,8 @@
 
   async function playNext(track) {
     const music = musicKit()
-    if (!music) return
-    await music.playNext({ song: track.catalogId || track.id })
+    if (!music) throw new Error('Apple Music is still starting up.')
+    await within(music.playNext({ song: track.catalogId || track.id }), 15000, 'Apple Music didn’t respond.')
   }
 
   const time = (ms) => {
@@ -382,6 +410,7 @@
           await playNext(track)
           status.textContent = `“${track.title}” will play next.`
         } else {
+          status.textContent = `Starting “${track.title}”…`
           await playFrom(playlist, track)
           input.blur()
           showPanel(false)
