@@ -15,6 +15,9 @@ use crate::{
 };
 
 pub const PLAYER_WINDOW_LABEL: &str = "player";
+/// Starts a probe error that is about the audio output device, not about
+/// reading what's playing.
+pub const AUDIO_OUTPUT_PREFIX: &str = "Audio output: ";
 
 /// Start or stop the player webview's rendering.
 ///
@@ -347,7 +350,7 @@ impl PlayerBridge {
         snapshot.bitrate = status.bitrate;
         snapshot.catalog_id = status.catalog_id.clone().filter(|id| !id.is_empty());
         if let Some(sink_error) = status.sink_error.as_ref().filter(|e| !e.is_empty()) {
-            snapshot.last_error = Some(format!("Audio routing: {sink_error}"));
+            snapshot.last_error = Some(format!("{AUDIO_OUTPUT_PREFIX}{sink_error}"));
         }
 
         // Exact catalog-id match beats fuzzy title matching when available.

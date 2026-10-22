@@ -98,27 +98,67 @@
   // The desired sink is pushed from the app settings. It is applied to every
   // current and future media element (and the keepalive context) so the
   // player's audio can be pointed at e.g. a Wave Link virtual device.
-  const routing = { desired: '', devices: [], lastError: '', failedTarget: null }
+  const routing = { desired: '', devices: [], lastError: '', failed: null }
 
   // Switching a sink tears down and rebuilds the underlying output stream, so
   // every one of these calls must be conditional. Re-applying a sink that is
   // already in place is what made playback crackle.
   let keepaliveSinkPending = false
 
+  // A device can refuse briefly (a wireless headset waking up, a game holding
+  // it in exclusive mode, a virtual device restarting): Chromium answers
+  // "The operation could not be performed and was aborted". Retry with a
+  // growing wait instead of giving up for good, and never every sweep.
+  const RETRY_AFTER_MS = [5000, 15000, 30000, 60000, 120000]
+
+  function mayTry(target) {
+    const failed = routing.failed
+    return !failed || failed.target !== target || Date.now() >= failed.retryAt
+  }
+
+  function deviceLabel(id) {
+    if (!id) return 'the default output'
+    const match = routing.devices.find((device) => device.id === id)
+    return match ? match.label : 'the chosen output'
+  }
+
+  function noteFailure(target, error) {
+    const attempts = routing.failed && routing.failed.target === target ? routing.failed.attempts + 1 : 1
+    const wait = RETRY_AFTER_MS[Math.min(attempts - 1, RETRY_AFTER_MS.length - 1)]
+    routing.failed = { target, attempts, retryAt: Date.now() + wait }
+    const why = String((error && error.message) || error)
+    routing.lastError =
+      `couldn’t switch to ${deviceLabel(target)} (it may be busy or asleep); ` +
+      `retrying in ${Math.round(wait / 1000)} s. ${why}`
+  }
+
+  function noteSuccess(target) {
+    if (routing.failed && routing.failed.target === target) {
+      routing.failed = null
+      routing.lastError = ''
+    }
+  }
+
   function applySinkTo(element) {
     if (!element || typeof element.setSinkId !== 'function') {
       return
     }
     const target = routing.desired || ''
-    if ((element.sinkId || '') === target || routing.failedTarget === target) {
+    if ((element.sinkId || '') === target) {
+      noteSuccess(target)
       return
     }
-    element.setSinkId(target).catch((error) => {
-      routing.lastError = String((error && error.message) || error)
-      // Stop hammering a device that will not accept us until the target
-      // changes; retrying every sweep would restart the stream endlessly.
-      routing.failedTarget = target
-    })
+    if (!mayTry(target) || element.__applecrapSinkPending) {
+      return
+    }
+    element.__applecrapSinkPending = true
+    element
+      .setSinkId(target)
+      .then(() => noteSuccess(target))
+      .catch((error) => noteFailure(target, error))
+      .then(() => {
+        element.__applecrapSinkPending = false
+      })
   }
 
   function applyKeepaliveSink() {
@@ -127,15 +167,13 @@
     }
     const target = routing.desired || ''
     const current = typeof keepalive.sinkId === 'string' ? keepalive.sinkId : ''
-    if (current === target || routing.failedTarget === target) {
+    if (current === target || !mayTry(target)) {
       return
     }
     keepaliveSinkPending = true
     Promise.resolve(keepalive.setSinkId(target))
-      .catch((error) => {
-        routing.lastError = String((error && error.message) || error)
-        routing.failedTarget = target
-      })
+      .then(() => noteSuccess(target))
+      .catch((error) => noteFailure(target, error))
       .then(() => {
         keepaliveSinkPending = false
       })
@@ -149,12 +187,19 @@
   async function refreshOutputDevices() {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices()
+      const before = routing.devices.map((device) => device.id).join('|')
       routing.devices = devices
         .filter((device) => device.kind === 'audiooutput')
         .map((device, index) => ({
           id: device.deviceId,
           label: device.label || 'Output device ' + (index + 1),
         }))
+      // A device appearing or coming back (a headset waking up) is the best
+      // moment to try a failed switch again.
+      if (routing.failed && before !== routing.devices.map((device) => device.id).join('|')) {
+        routing.failed.retryAt = 0
+        mediaMaybeChanged = true
+      }
     } catch (_) {
       routing.devices = []
     }
@@ -319,6 +364,8 @@
         if (op === 'setSink') {
           routing.desired = id || ''
           routing.lastError = ''
+          // Choosing a device (even the same one again) is a fresh try.
+          routing.failed = null
           applySinkEverywhere()
           return done(
             true,
@@ -467,7 +514,8 @@
     }
     // Sweep when new media elements may have appeared, and as a slow safety
     // net otherwise. Each sweep is idempotent, so this cannot disturb audio.
-    if (mediaMaybeChanged || tick % 15 === 0) {
+    const retryDue = !!routing.failed && Date.now() >= routing.failed.retryAt
+    if (mediaMaybeChanged || retryDue || tick % 15 === 0) {
       mediaMaybeChanged = false
       applySinkEverywhere()
     }
