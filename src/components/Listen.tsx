@@ -28,21 +28,21 @@ export function Listen({ store, state }: { store: AppStore; state: AppState }) {
   const listen = state.listen
   const on = listen.phase !== 'off'
   const [channel, setChannel] = useState(() => listen.channel || readChannel())
-  const [delayMs, setDelayMs] = useState(listen.delayMs)
+  const [offsetMs, setOffsetMs] = useState(listen.offsetMs)
   const phase = PHASES[listen.phase] ?? PHASES.off
 
   // The slider moves freely; the app hears about it once it settles.
-  const sentDelay = useRef(listen.delayMs)
+  const sentOffset = useRef(listen.offsetMs)
   useEffect(() => {
-    if (!on || delayMs === sentDelay.current) {
+    if (!on || offsetMs === sentOffset.current) {
       return
     }
     const timer = window.setTimeout(() => {
-      sentDelay.current = delayMs
-      void store.setListenDelay(delayMs)
+      sentOffset.current = offsetMs
+      void store.setListenOffset(offsetMs)
     }, 350)
     return () => window.clearTimeout(timer)
-  }, [delayMs, on, store])
+  }, [offsetMs, on, store])
 
   const start = () => {
     try {
@@ -50,8 +50,8 @@ export function Listen({ store, state }: { store: AppStore; state: AppState }) {
     } catch {
       // Private storage unavailable: the channel isn't remembered.
     }
-    sentDelay.current = delayMs
-    void store.startListening(channel, delayMs)
+    sentOffset.current = offsetMs
+    void store.startListening(channel, offsetMs)
   }
 
   return (
@@ -64,9 +64,9 @@ export function Listen({ store, state }: { store: AppStore; state: AppState }) {
           {on || listen.phase === 'error' ? <span className={cx(s.statusText, phase.tone)}>{phase.text}</span> : null}
         </div>
         <p className={s.hint}>
-          You found it! Play another streamer&rsquo;s music on your own Apple Music, in time with their stream: mute their stream, then
-          follow the channel their AppleCrap posts songs in (<code>!listen</code> in their chat says which). Sign in to Apple Music in the
-          player first. Song requests wait in your queue while you listen.
+          You found it! Streaming with someone? Play the same music at the same moment: follow the channel their AppleCrap posts songs
+          in (<code>!listen</code> in their chat says which), and each song they play starts here too, on your own Apple Music. Sign in to
+          Apple Music in the player first. Your song requests wait in your queue while you listen.
         </p>
         <div className={cx(s.card, s.cardPad)}>
           <div className={s.grid2}>
@@ -110,26 +110,29 @@ export function Listen({ store, state }: { store: AppStore; state: AppState }) {
         </div>
       </section>
 
-      <section className={s.section} aria-labelledby="delay-heading">
-        <span id="delay-heading" className={s.label}>
-          Stream delay
+      <section className={s.section} aria-labelledby="offset-heading">
+        <span id="offset-heading" className={s.label}>
+          Fine-tune
         </span>
         <div className={cx(s.card, s.cardPad)}>
           <label className={s.field}>
-            {(delayMs / 1000).toFixed(1)} seconds behind the streamer
+            {offsetMs === 0
+              ? 'In step with the host'
+              : `${(Math.abs(offsetMs) / 1000).toFixed(1)} seconds ${offsetMs > 0 ? 'later' : 'earlier'} than the host`}
             <input
               className={s.range}
               type="range"
-              min={0}
-              max={30000}
-              step={250}
-              value={delayMs}
-              onChange={(event) => setDelayMs(Number(event.target.value))}
+              min={-3000}
+              max={3000}
+              step={100}
+              value={offsetMs}
+              onChange={(event) => setOffsetMs(Number(event.target.value))}
+              onDoubleClick={() => setOffsetMs(0)}
             />
           </label>
           <p className={s.hint}>
-            Song ahead of the stream? Slide right. Behind it? Slide left. Changes apply to the song playing now. Twitch&rsquo;s low-latency
-            mode is usually 2&ndash;5 seconds.
+            Songs start in step with the host on their own. If you hear yours ahead of theirs on the call, slide right; behind, slide
+            left. It applies to the song playing now. Double-click to reset.
           </p>
         </div>
       </section>

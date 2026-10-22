@@ -230,7 +230,7 @@ export type ListenStatus = {
   phase: 'off' | 'connecting' | 'waiting' | 'playing' | 'error'
   channel: string
   detail: string
-  delayMs: number
+  offsetMs: number
   title: string
   artist: string
   requestedBy: string | null

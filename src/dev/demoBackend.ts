@@ -129,7 +129,7 @@ const state: AppState = {
   channelPoints: { phase: 'live', detail: 'Taking requests through "Request a song" (500 points).' },
   alerts: [],
   nowPlayingRequest: { requestedBy: 'vinyl_vibes', source: 'channel-points' },
-  listen: { phase: 'off', channel: '', detail: '', delayMs: 4000, title: '', artist: '', requestedBy: null },
+  listen: { phase: 'off', channel: '', detail: '', offsetMs: 0, title: '', artist: '', requestedBy: null },
 }
 
 if (scene === 'empty') {
@@ -230,7 +230,7 @@ async function invoke(command: string, args: Record<string, unknown> = {}): Prom
         ...state.listen,
         phase: 'playing',
         channel: String(args.channel),
-        delayMs: Number(args.delayMs),
+        offsetMs: Number(args.offsetMs),
         detail: `Following #${String(args.channel)}.`,
         title: nowPlaying.title,
         artist: nowPlaying.artistName,
@@ -240,8 +240,8 @@ async function invoke(command: string, args: Record<string, unknown> = {}): Prom
     case 'listen_stop':
       state.listen = { ...state.listen, phase: 'off', detail: '', title: '', artist: '', requestedBy: null }
       return snapshot()
-    case 'listen_set_delay':
-      state.listen.delayMs = Number(args.delayMs)
+    case 'listen_set_offset':
+      state.listen.offsetMs = Number(args.offsetMs)
       return snapshot()
     case 'remove_request':
       state.queue = state.queue.filter((item) => item.id !== args.id)

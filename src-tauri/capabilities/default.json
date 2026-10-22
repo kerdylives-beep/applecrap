@@ -39,6 +39,6 @@
     "allow-player-control",
     "allow-listen-start",
     "allow-listen-stop",
-    "allow-listen-set-delay"
+    "allow-listen-set-offset"
   ]
 }

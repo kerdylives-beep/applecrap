@@ -202,7 +202,7 @@ impl AppContext {
                 player_loading_since: None,
                 listen: crate::models::ListenStatus {
                     phase: "off".to_string(),
-                    delay_ms: listen::DEFAULT_DELAY_MS,
+                    offset_ms: listen::DEFAULT_OFFSET_MS,
                     ..Default::default()
                 },
                 listen_song: None,
@@ -226,7 +226,10 @@ impl AppContext {
         tauri::async_runtime::spawn(async move {
             loop {
                 let _ = probe_context.run_probe_cycle().await;
-                tokio::time::sleep(Duration::from_millis(2500)).await;
+                tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_millis(2500)) => {}
+                    _ = probe_context.player_bridge.track_changed.notified() => {}
+                }
             }
         });
 

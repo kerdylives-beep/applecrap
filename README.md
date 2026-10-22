@@ -24,7 +24,7 @@ It only asks once, and updates never trigger it again.
 - ✅ Lets you approve, remove, or pick the right match for a request, right in the queue
 - 🎧 Queues matched tracks straight into Apple Music as Play Next, so they play automatically and the streamer's playlist resumes once requests run out
 - 📺 Serves a now-playing overlay for OBS (current song, requester, and what is next)
-- 🎶 Listen together (beta): other streamers with AppleCrap can play your music in sync on their own Apple Music, with your stream muted
+- 🎶 Listen together (beta): streaming with someone? Both of you play the same music at the same moment, each on your own Apple Music
 - 🛟 Tells you plainly when something needs attention (a crash, Apple Music trouble, chat offline) and saves a problem report in one click
 - ♻️ Updates itself, and switches back to the previous version automatically if an update won't start
 - 💾 Stores data in the portable folder when possible
@@ -144,22 +144,23 @@ instead. Mods can still use the chat command.
 
 ## Listen Together (Beta)
 
-Other streamers can play your music on their own Apple Music, in time with your stream, while
-they keep your stream muted. Handy for watch-alongs and co-streams, and nobody re-streams your audio.
+For two streamers live together: the host's music plays on both setups at the same moment, so both
+streams carry the same song in sync, each from its own Apple Music account.
 
-**Your side:** in **Setup**, tick **Post each new song in chat**. Each new song then gets a
-"🎵 Now playing: …" post with an Apple Music link. If you use a separate bot account, you can tick
-**Post them in the bot's chat instead** so the posts don't crowd your chat. Posts are followed only
-from the channel owner or a mod, so if they stay in your chat, the bot must be a mod there.
-`!listen` tells people which channel to follow.
+**Host:** in **Setup**, tick **Post each new song in chat**. Each new song then gets a
+"🎵 Now playing: …" post with an Apple Music link, sent the moment it starts. If you use a separate
+bot account, you can tick **Post them in the bot's chat instead** so the posts don't crowd your
+chat. Posts are followed only from the channel owner or a mod, so if they stay in your chat, the
+bot must be a mod there. `!listen` says which channel to follow.
 
-**Their side:** AppleCrap, signed in to Apple Music in its player. The Listen tab is hidden: click
-the apple at the top left three times. Enter the channel the songs are posted in and press
-**Start listening**. Each new song plays in their player, started where your stream is. If it runs
-ahead of or behind your stream, they move the **Stream delay** slider. Their own song requests wait in their
-queue until they stop listening. No Twitch sign-in is needed to listen.
+**Guest:** AppleCrap, signed in to Apple Music in its player. The Listen tab is hidden: click the
+apple at the top left three times. Enter the channel the songs are posted in and press
+**Start listening**. Each song the host plays starts in the guest's player too, at the same point.
+If one of you sounds slightly ahead on your call, the **Fine-tune** slider moves the guest's music
+up to 3 seconds either way. The guest's own song requests wait in their queue until they stop
+listening. No Twitch sign-in is needed to listen.
 
-For now, songs follow along but pauses don't.
+For now, new songs follow along but pauses don't.
 
 ## Chat Commands
 
@@ -201,7 +202,7 @@ Check your position in the queue and a preview of what's up next:
 !queue
 ```
 
-Tell other streamers how to listen along (see Listen Together):
+Tell a streamer you're live with how to play your music in sync (see Listen Together):
 
 ```text
 !listen

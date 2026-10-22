@@ -261,10 +261,10 @@
           "markdownDescription": "Enables the install_update command without any pre-configured scope."
         },
         {
-          "description": "Enables the listen_set_delay command without any pre-configured scope.",
+          "description": "Enables the listen_set_offset command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-listen-set-delay",
-          "markdownDescription": "Enables the listen_set_delay command without any pre-configured scope."
+          "const": "allow-listen-set-offset",
+          "markdownDescription": "Enables the listen_set_offset command without any pre-configured scope."
         },
         {
           "description": "Enables the listen_start command without any pre-configured scope.",
@@ -477,10 +477,10 @@
           "markdownDescription": "Denies the install_update command without any pre-configured scope."
         },
         {
-          "description": "Denies the listen_set_delay command without any pre-configured scope.",
+          "description": "Denies the listen_set_offset command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-listen-set-delay",
-          "markdownDescription": "Denies the listen_set_delay command without any pre-configured scope."
+          "const": "deny-listen-set-offset",
+          "markdownDescription": "Denies the listen_set_offset command without any pre-configured scope."
         },
         {
           "description": "Denies the listen_start command without any pre-configured scope.",

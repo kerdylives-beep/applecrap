@@ -282,8 +282,8 @@ pub struct ListenStatus {
     pub phase: String,
     pub channel: String,
     pub detail: String,
-    /// How far behind the streamer the listener's stream runs.
-    pub delay_ms: u64,
+    /// Fine-tune: positive plays later than the host, negative earlier.
+    pub offset_ms: i64,
     pub title: String,
     pub artist: String,
     pub requested_by: Option<String>,

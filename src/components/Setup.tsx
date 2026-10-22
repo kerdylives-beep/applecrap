@@ -236,7 +236,7 @@ export function Setup({ store, state }: { store: AppStore; state: AppState }) {
         ) : null}
         {draft.twitch.announceSongs ? (
           <p className={s.hint}>
-            Other streamers with AppleCrap can play your music in sync on their own Apple Music, with your stream muted;{' '}
+            Streaming with someone who has AppleCrap? They can play the same music at the same moment on their own Apple Music;{' '}
             <code>!listen</code> tells them how.
             {botLogin && botLogin !== channel && !draft.twitch.announceInBotChannel ? ` @${botLogin} needs to be a mod for that.` : ''}
           </p>

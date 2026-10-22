@@ -40,7 +40,7 @@ fn main() {
             "player_control",
             "listen_start",
             "listen_stop",
-            "listen_set_delay",
+            "listen_set_offset",
         ]),
     ))
     .expect("failed to run tauri-build");

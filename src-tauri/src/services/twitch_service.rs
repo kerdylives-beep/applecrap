@@ -862,8 +862,8 @@ fn format_skip_reply(probe: &ProbeSnapshot) -> String {
     }
 }
 
-/// How other streamers join Listen together: they play the music on their
-/// own Apple Music, in time, with this stream muted. It needs the
+/// How a streamer streaming with this one joins Listen together: the same
+/// music at the same moment, on their own Apple Music. It needs the
 /// "Now playing" posts on; `channel` is where they're posted.
 fn listen_reply(announcing: bool, channel: &str) -> String {
     if !announcing {
@@ -871,7 +871,7 @@ fn listen_reply(announcing: bool, channel: &str) -> String {
     }
     let channel = channel.trim().trim_start_matches('#').to_lowercase();
     format!(
-        "Streamers: play this music in sync on your own Apple Music (keep this stream muted). Get AppleCrap \
+        "Streaming together? Play the same music at the same moment on your own Apple Music: get AppleCrap \
          (github.com/kerdylives-beep/applecrap), click the apple at the top left 3 times, then follow {channel} in the Listen tab."
     )
 }
