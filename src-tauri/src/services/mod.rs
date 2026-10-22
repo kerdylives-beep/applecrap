@@ -6,6 +6,7 @@ pub mod channel_points;
 pub mod diagnostics;
 pub mod eventsub;
 pub mod irc;
+pub mod listen;
 pub mod overlay_server;
 pub mod player_bridge;
 pub mod queue_engine;

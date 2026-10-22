@@ -24,6 +24,7 @@ It only asks once, and updates never trigger it again.
 - ✅ Lets you approve, remove, or pick the right match for a request, right in the queue
 - 🎧 Queues matched tracks straight into Apple Music as Play Next, so they play automatically and the streamer's playlist resumes once requests run out
 - 📺 Serves a now-playing overlay for OBS (current song, requester, and what is next)
+- 🎶 Listen together (beta): viewers with AppleCrap can play the stream's music in their own Apple Music, in time with the stream
 - 🛟 Tells you plainly when something needs attention (a crash, Apple Music trouble, chat offline) and saves a problem report in one click
 - ♻️ Updates itself, and switches back to the previous version automatically if an update won't start
 - 💾 Stores data in the portable folder when possible
@@ -141,6 +142,23 @@ six hours are refunded instead). Turning the feature off hides the reward.
 Tick **Only take requests through Channel Points** to have `!request` point viewers at the reward
 instead. Mods can still use the chat command.
 
+## Listen Together (Beta)
+
+Viewers who have Apple Music can hear your music in full quality, in time with your stream, on
+their own account. Handy when you keep music off the stream itself.
+
+**Streamer:** in **Setup**, tick **Post each new song in chat**. Each new song then gets a
+"🎵 Now playing: …" post with an Apple Music link. Posts are followed only when they come from
+your channel or a mod, so a separate bot account must be a mod.
+
+**Viewer:** get AppleCrap and sign in to Apple Music in its player. The Listen tab is hidden: click
+the apple at the top left three times. Enter the streamer's channel and press **Start listening**.
+Each time a new song is posted, it plays in your player, started where the stream is. If the music
+runs ahead of or behind the stream, move the **Stream delay** slider. Listening doesn't need a
+Twitch sign-in.
+
+For now, songs follow along but pauses don't: if the streamer pauses, keep listening or press pause yourself.
+
 ## Chat Commands
 
 Default request command:
@@ -181,6 +199,12 @@ Check your position in the queue and a preview of what's up next:
 !queue
 ```
 
+Tell viewers how to listen along (see Listen Together):
+
+```text
+!listen
+```
+
 Skip the current track (mods/broadcaster only):
 
 ```text
@@ -191,7 +215,7 @@ Skip the current track (mods/broadcaster only):
 
 AppleCrap has no servers and no analytics. Everything stays on your PC except what it has to send:
 
-- **Twitch** — to read and reply in your chat, and (if you use it) to manage your Channel Points reward.
+- **Twitch** — to read and reply in your chat, and (if you use it) to manage your Channel Points reward. Listen together reads the streamer's chat without signing in.
 - **Apple** — song searches, and the Apple Music player itself.
 - **GitHub** — to check for and download updates.
 

@@ -40,6 +40,7 @@ mod announce;
 mod auth;
 mod channel_points;
 mod health;
+mod listen;
 mod maintenance;
 mod overlay;
 mod playback;
@@ -78,6 +79,8 @@ pub struct AppContext {
     channel_points_listener: Mutex<Option<(String, JoinHandle<()>)>>,
     /// A pending retry of Channel Points setup after a network failure.
     channel_points_retry: Mutex<Option<JoinHandle<()>>>,
+    /// Listen together: the follower reading another channel's chat.
+    listen_task: Mutex<Option<JoinHandle<()>>>,
     /// Recently handled redemption ids (see `first_sighting`).
     seen_redemptions: std::sync::Mutex<std::collections::VecDeque<String>>,
     /// Wakes the Apple Music search health check early.
@@ -114,6 +117,13 @@ struct RuntimeState {
     channel_points_status: crate::models::ChannelPointsStatus,
     alerts: Vec<crate::models::Alert>,
     player_loading_since: Option<std::time::Instant>,
+    listen: crate::models::ListenStatus,
+    /// The song being followed and when its post arrived, so a delay change
+    /// can re-seek it.
+    listen_song: Option<(String, std::time::SystemTime)>,
+    /// Bumped for every followed post; a play still waiting out the delay
+    /// gives up if a newer one arrived.
+    listen_generation: u64,
 }
 
 impl AppContext {
@@ -190,6 +200,13 @@ impl AppContext {
                 channel_points_status: Default::default(),
                 alerts,
                 player_loading_since: None,
+                listen: crate::models::ListenStatus {
+                    phase: "off".to_string(),
+                    delay_ms: listen::DEFAULT_DELAY_MS,
+                    ..Default::default()
+                },
+                listen_song: None,
+                listen_generation: 0,
             }),
             twitch_connection: Mutex::new(None),
             overlay_task: Mutex::new(None),
@@ -198,6 +215,7 @@ impl AppContext {
             channel_points_sync: Mutex::new(()),
             channel_points_listener: Mutex::new(None),
             channel_points_retry: Mutex::new(None),
+            listen_task: Mutex::new(None),
             seen_redemptions: std::sync::Mutex::new(Default::default()),
             apple_health_nudge: tokio::sync::Notify::new(),
         })
@@ -331,6 +349,7 @@ impl AppContext {
             channel_points: runtime.channel_points_status.clone(),
             alerts: runtime.alerts.clone(),
             now_playing_request: overlay::current_request(&runtime),
+            listen: runtime.listen.clone(),
             stats: AppStats {
                 total_requests: persisted.queue.len(),
                 unresolved_requests: persisted

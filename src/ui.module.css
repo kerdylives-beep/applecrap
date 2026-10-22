@@ -28,6 +28,38 @@
   height: 18px;
 }
 
+/* The apple is a button: three clicks open Listen together. */
+.brandButton {
+  display: flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: default;
+}
+
+.wiggle {
+  animation: wiggle 700ms ease-in-out;
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0) scale(1); }
+  15% { transform: rotate(-18deg) scale(1.15); }
+  35% { transform: rotate(14deg) scale(1.25); }
+  55% { transform: rotate(-10deg) scale(1.15); }
+  75% { transform: rotate(6deg) scale(1.05); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wiggle {
+    animation: none;
+  }
+}
+
+.range {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
 .brandName {
   font: 700 17px var(--font-display);
   letter-spacing: 0.01em;

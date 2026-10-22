@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { MouseEvent } from 'react'
+import { useState, type MouseEvent } from 'react'
 import faviconUrl from '../../img/icon-small.svg'
 import type { AppStore } from '../useAppStore'
 import type { AppState, ViewKey } from '../types'
@@ -58,7 +58,8 @@ function statusDots(state: AppState) {
   return dots
 }
 
-export function TitleBar({ state }: { state: AppState }) {
+export function TitleBar({ state, onSecret }: { state: AppState; onSecret: () => void }) {
+  const [wiggling, setWiggling] = useState(false)
   const startDrag = (event: MouseEvent<HTMLElement>) => {
     if (event.button === 0 && !(event.target as HTMLElement).closest('button')) {
       void invoke('window_start_drag')
@@ -73,7 +74,20 @@ export function TitleBar({ state }: { state: AppState }) {
   return (
     <header className={s.titleBar} onMouseDown={startDrag} onDoubleClick={toggleMaximize}>
       <div className={s.brand}>
-        <img className={s.brandIcon} src={faviconUrl} alt="" />
+        <button
+          type="button"
+          className={s.brandButton}
+          tabIndex={-1}
+          aria-hidden="true"
+          onClick={(event) => {
+            if (event.detail === 3) {
+              setWiggling(true)
+              onSecret()
+            }
+          }}
+        >
+          <img className={cx(s.brandIcon, wiggling && s.wiggle)} src={faviconUrl} alt="" onAnimationEnd={() => setWiggling(false)} />
+        </button>
         <span className={s.brandName}>AppleCrap</span>
         <span className={s.brandTag}>Beta</span>
       </div>
@@ -105,10 +119,21 @@ const VIEWS: Array<{ key: ViewKey; label: string }> = [
   { key: 'help', label: 'Help' },
 ]
 
-export function Nav({ view, onView, onShowPlayer }: { view: ViewKey; onView: (view: ViewKey) => void; onShowPlayer: () => void }) {
+export function Nav({
+  view,
+  onView,
+  onShowPlayer,
+  showListen,
+}: {
+  view: ViewKey
+  onView: (view: ViewKey) => void
+  onShowPlayer: () => void
+  showListen: boolean
+}) {
+  const views = showListen ? [...VIEWS.slice(0, 1), { key: 'listen' as const, label: 'Listen' }, ...VIEWS.slice(1)] : VIEWS
   return (
     <nav className={s.nav} aria-label="Sections">
-      {VIEWS.map((item) => (
+      {views.map((item) => (
         <button
           key={item.key}
           type="button"
@@ -156,7 +181,7 @@ export function AlertStack({ store, state }: { store: AppStore; state: AppState 
             detail: 'Your settings and queue are kept.',
             actions: [
               {
-                label: store.busyAction === 'install-update' ? 'Installingâ€¦' : 'Install and restart',
+                label: store.busyAction === 'install-update' ? 'Installing…' : 'Install and restart',
                 primary: true,
                 busy: store.busyAction === 'install-update',
                 run: () => void store.installUpdate(),

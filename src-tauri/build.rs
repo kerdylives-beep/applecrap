@@ -38,6 +38,9 @@ fn main() {
             "dismiss_alert",
             "report_problem",
             "player_control",
+            "listen_start",
+            "listen_stop",
+            "listen_set_delay",
         ]),
     ))
     .expect("failed to run tauri-build");

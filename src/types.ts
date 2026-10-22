@@ -9,7 +9,7 @@ export type QueueHandoffState =
   | 'confirmed-playing'
   | 'manual-review'
   | 'failed-dispatch'
-export type ViewKey = 'desk' | 'setup' | 'overlay' | 'activity' | 'help'
+export type ViewKey = 'desk' | 'setup' | 'overlay' | 'activity' | 'help' | 'listen'
 
 export type TrackMatch = {
   id: string
@@ -222,6 +222,17 @@ export type AppState = {
   channelPoints: ChannelPointsStatus
   alerts: Alert[]
   nowPlayingRequest: NowPlayingRequest | null
+  listen: ListenStatus
+}
+
+export type ListenStatus = {
+  phase: 'off' | 'connecting' | 'waiting' | 'playing' | 'error'
+  channel: string
+  detail: string
+  delayMs: number
+  title: string
+  artist: string
+  requestedBy: string | null
 }
 
 export type ManualRequestPayload = {

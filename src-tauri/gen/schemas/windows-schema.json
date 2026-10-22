@@ -261,6 +261,24 @@
           "markdownDescription": "Enables the install_update command without any pre-configured scope."
         },
         {
+          "description": "Enables the listen_set_delay command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-listen-set-delay",
+          "markdownDescription": "Enables the listen_set_delay command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the listen_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-listen-start",
+          "markdownDescription": "Enables the listen_start command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the listen_stop command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-listen-stop",
+          "markdownDescription": "Enables the listen_stop command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_overlay_preview command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-overlay-preview",
@@ -457,6 +475,24 @@
           "type": "string",
           "const": "deny-install-update",
           "markdownDescription": "Denies the install_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the listen_set_delay command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-listen-set-delay",
+          "markdownDescription": "Denies the listen_set_delay command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the listen_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-listen-start",
+          "markdownDescription": "Denies the listen_start command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the listen_stop command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-listen-stop",
+          "markdownDescription": "Denies the listen_stop command without any pre-configured scope."
         },
         {
           "description": "Denies the open_overlay_preview command without any pre-configured scope.",

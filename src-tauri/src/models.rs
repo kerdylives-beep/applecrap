@@ -268,6 +268,22 @@ pub struct ChannelPointsStatus {
     pub detail: String,
 }
 
+/// Listen together on the listener's side: following a channel's
+/// "Now playing" posts.
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ListenStatus {
+    /// "off", "connecting", "waiting", "playing" or "error".
+    pub phase: String,
+    pub channel: String,
+    pub detail: String,
+    /// How far behind the streamer the listener's stream runs.
+    pub delay_ms: u64,
+    pub title: String,
+    pub artist: String,
+    pub requested_by: Option<String>,
+}
+
 /// What the overlay page renders. Built fresh per request; the overlay polls.
 #[derive(Clone, Serialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
@@ -626,6 +642,7 @@ pub struct AppState {
     pub alerts: Vec<Alert>,
     /// Who asked for the song playing now, when it came from the queue.
     pub now_playing_request: Option<NowPlayingRequest>,
+    pub listen: ListenStatus,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]

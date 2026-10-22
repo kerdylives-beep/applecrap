@@ -221,6 +221,12 @@ export function Setup({ store, state }: { store: AppStore; state: AppState }) {
           <input type="checkbox" checked={draft.twitch.announceSongs} onChange={(event) => store.updateDraft('twitch', { announceSongs: event.target.checked })} />
           Post each new song in chat (&ldquo;Now playing: &hellip;&rdquo;, with an Apple Music link)
         </label>
+        {draft.twitch.announceSongs ? (
+          <p className={s.hint}>
+            Viewers with AppleCrap can listen along in time with your stream; <code>!listen</code> tells them how. A separate bot account
+            needs to be a mod for that.
+          </p>
+        ) : null}
         {state.auth.available && !signedIn && !state.settings.twitch.oauthToken ? (
           <label className={s.check}>
             <input type="checkbox" checked={pastedToken} onChange={(event) => setPastedToken(event.target.checked)} />
