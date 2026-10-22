@@ -78,6 +78,11 @@ Your keyboard's **media keys** (play/pause, next, previous) control the player w
 To browse Apple Music in the player window, use the **Back** and **Forward** buttons at the top, just outside
 the sidebar, **Alt+Left/Right Arrow**, or your mouse's side buttons. Moving around never stops the music.
 
+On a playlist page there's also a **Filter** box next to them (or press **Ctrl+F**). It searches the
+whole playlist, not just the songs Apple has loaded so far, by song, artist or album. Click a match to
+play the playlist from that song, or use its **Play Next** button to slot it in after the current song.
+Requests already waiting to play stay in place.
+
 The player window can stay hidden the whole time; while hidden it stops drawing entirely, so it costs almost nothing to leave running beside a game.
 
 **Audio quality:** playback runs at 256 kbps AAC, the highest the Apple Music web player offers, and

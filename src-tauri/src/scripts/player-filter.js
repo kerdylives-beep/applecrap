@@ -66,6 +66,7 @@
       words: words([a.name, a.artistName, a.albumName].join(' ')),
       titleWords: words(a.name),
       titleKey: words(a.name).join(' '),
+      artistKey: words(a.artistName).join(' '),
     }
   }
 
@@ -119,6 +120,8 @@
     const score = (track) => {
       let points = 0
       if (track.titleKey.startsWith(phrase)) points += 1000
+      // Typing an artist's name lists their own songs before features.
+      else if (track.artistKey.startsWith(phrase)) points += 600
       else if ((' ' + track.titleKey).includes(' ' + phrase)) points += 500
       for (const word of typed) {
         if (track.titleWords.includes(word)) points += 20
@@ -274,10 +277,11 @@
         }
         .panel[hidden] { display: none; }
         .status { padding: 8px 12px; font-size: 12px; color: rgba(255, 255, 255, 0.55); border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
-        .list { overflow-y: auto; }
+        .list { overflow-y: auto; overflow-x: hidden; }
         .row {
           display: grid;
-          grid-template-columns: 1fr auto auto;
+          /* minmax(0, …) lets long names cut off instead of widening the row. */
+          grid-template-columns: minmax(0, 1fr) auto auto;
           align-items: center;
           gap: 10px;
           padding: 7px 8px 7px 12px;
