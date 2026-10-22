@@ -40,7 +40,7 @@ function request(
 }
 
 const settings: AppSettings = {
-  twitch: { channel: 'yourchannel', botUsername: '', oauthToken: '', requestCommand: '!sr', autoConnect: true },
+  twitch: { channel: 'yourchannel', botUsername: '', oauthToken: '', requestCommand: '!sr', autoConnect: true, announceSongs: false },
   requestLimits: {
     maxQueueSize: 25,
     maxPerUser: 2,

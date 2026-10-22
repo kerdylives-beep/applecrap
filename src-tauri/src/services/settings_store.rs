@@ -417,6 +417,7 @@ impl LegacyTwitchSettings {
             oauth_token: self.oauth_token,
             request_command: self.request_command,
             auto_connect: self.auto_connect,
+            announce_songs: false,
         }
     }
 }

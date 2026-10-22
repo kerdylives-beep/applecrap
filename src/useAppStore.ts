@@ -67,6 +67,7 @@ const defaultSettings: AppSettings = {
     oauthToken: '',
     requestCommand: '!request',
     autoConnect: false,
+    announceSongs: false,
   },
   requestLimits: {
     maxQueueSize: 25,

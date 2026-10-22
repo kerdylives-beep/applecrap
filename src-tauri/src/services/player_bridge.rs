@@ -345,6 +345,7 @@ impl PlayerBridge {
             .filter(|ms| *ms > 0 && *ms < MAX_PLAUSIBLE_TRACK_MS);
         snapshot.position_ms = status.position_ms;
         snapshot.bitrate = status.bitrate;
+        snapshot.catalog_id = status.catalog_id.clone().filter(|id| !id.is_empty());
         if let Some(sink_error) = status.sink_error.as_ref().filter(|e| !e.is_empty()) {
             snapshot.last_error = Some(format!("Audio routing: {sink_error}"));
         }

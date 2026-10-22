@@ -27,6 +27,7 @@ impl AppContext {
         for note in self.player_bridge.take_notes().await {
             self.add_log(LogLevel::Info, format!("Player: {note}")).await;
         }
+        self.announce_if_new_song(&snapshot, top_item.as_ref()).await;
 
         // A request removed after it reached the player: skip it the moment
         // it starts, when the player couldn't take it out of its queue.
