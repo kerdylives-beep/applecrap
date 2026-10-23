@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-listen-set-offset"
+description = "Enables the listen_set_offset command without any pre-configured scope."
+commands.allow = ["listen_set_offset"]
+
+[[permission]]
+identifier = "deny-listen-set-offset"
+description = "Denies the listen_set_offset command without any pre-configured scope."
+commands.deny = ["listen_set_offset"]

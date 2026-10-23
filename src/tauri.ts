@@ -113,16 +113,16 @@ export async function playerControl(op: PlayerOp) {
   return invoke<CommandResult>('player_control', { op })
 }
 
-export async function listenStart(channel: string, delayMs: number) {
-  return invoke<AppState>('listen_start', { channel, delayMs })
+export async function listenStart(channel: string, offsetMs: number) {
+  return invoke<AppState>('listen_start', { channel, offsetMs })
 }
 
 export async function listenStop() {
   return invoke<AppState>('listen_stop')
 }
 
-export async function listenSetDelay(delayMs: number) {
-  return invoke<AppState>('listen_set_delay', { delayMs })
+export async function listenSetOffset(offsetMs: number) {
+  return invoke<AppState>('listen_set_offset', { offsetMs })
 }
 
 export async function reportProblem() {

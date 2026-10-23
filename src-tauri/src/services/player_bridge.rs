@@ -92,6 +92,10 @@ pub struct PlayerBridge {
     /// Removed requests the player couldn't take out of its own queue.
     withdrawn: Mutex<WithdrawnTracks>,
     notes: Mutex<Vec<String>>,
+    /// Fires when the track or play state changes, so the probe runs at
+    /// once instead of on its next 2.5s tick ("Now playing" posts go out
+    /// right as a song starts, which Listen together's timing relies on).
+    pub track_changed: tokio::sync::Notify,
 }
 
 impl PlayerBridge {
@@ -101,6 +105,7 @@ impl PlayerBridge {
             pending: Mutex::new(HashMap::new()),
             withdrawn: Mutex::new(WithdrawnTracks::default()),
             notes: Mutex::new(Vec::new()),
+            track_changed: tokio::sync::Notify::new(),
         }
     }
 
@@ -109,7 +114,15 @@ impl PlayerBridge {
         match serde_json::from_value::<BridgeReport>(payload) {
             Ok(BridgeReport::Status(status)) => {
                 let mut latest = self.latest.write().await;
+                let changed = latest.as_ref().is_none_or(|(previous, _)| {
+                    previous.item_id != status.item_id
+                        || previous.playback_state != status.playback_state
+                });
                 *latest = Some((status, Instant::now()));
+                drop(latest);
+                if changed {
+                    self.track_changed.notify_one();
+                }
             }
             Ok(BridgeReport::Result { tag, ok, detail }) => {
                 let sender = self.pending.lock().await.remove(&tag);

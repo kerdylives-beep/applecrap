@@ -201,7 +201,7 @@ pub fn run() {
             player_control,
             listen_start,
             listen_stop,
-            listen_set_delay
+            listen_set_offset
         ])
         .build(tauri::generate_context!())
         .expect("error while building AppleCrap")

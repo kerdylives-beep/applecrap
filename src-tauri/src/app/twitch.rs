@@ -43,6 +43,29 @@ impl AppContext {
         }
     }
 
+    /// Posts a message in another channel over the same connection (it's
+    /// joined on first use). A no-op when the bot is offline.
+    pub async fn send_chat_in(&self, channel: &str, text: impl Into<String>) {
+        if let Some(connection) = self.twitch_connection.lock().await.as_ref() {
+            let _ = connection
+                .writer
+                .send(twitch_service::Outbound::chat_in(channel, text));
+        }
+    }
+
+    /// Where "Now playing" posts go: the bot account's own channel when that
+    /// option is on and the bot is a separate account, else the stream's.
+    pub async fn announce_channel(&self) -> String {
+        let settings = self.current_settings().await;
+        let channel = settings.twitch.channel.trim().trim_start_matches('#').to_lowercase();
+        if settings.twitch.announce_in_bot_channel {
+            if let Ok(login) = self.chat_login().await {
+                return login;
+            }
+        }
+        channel
+    }
+
     /// The signed-in account chat uses: the bot account first, then the
     /// broadcaster. `None` means a pasted legacy token (if any) is used.
     async fn chat_account(&self) -> Option<(AuthSlot, String)> {

@@ -1,11 +1,10 @@
-//! Listen together, the listener's side: follow a channel's "Now playing"
-//! posts and play each song in this AppleCrap's own player, lined up with
-//! the stream the listener is watching.
+//! Listen together, the guest's side: two streamers live together play the
+//! same music at the same moment. The guest follows the host's "Now playing"
+//! posts and plays each song in their own player, in step with the host.
 //!
-//! A song starts for the streamer a moment before the post goes out (the
-//! now-playing probe runs every 2.5s), and the listener's stream runs behind
-//! the streamer by the stream delay. So the song should be at the start, for
-//! the listener, at `post arrived - ANNOUNCE_LAG + delay`.
+//! The host's post goes out as the song starts and takes a moment to arrive,
+//! so the song started for the host at about `post arrived - ANNOUNCE_LAG`.
+//! The guest can nudge that by a small offset if one side sounds ahead.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -15,13 +14,14 @@ use crate::{
     services::{listen::parse_now_playing, twitch_service::FollowEvent},
 };
 
-pub const DEFAULT_DELAY_MS: u64 = 4_000;
-const MAX_DELAY_MS: u64 = 60_000;
-/// How long after a song starts its post typically reaches chat.
-const ANNOUNCE_LAG_MS: u64 = 1_500;
+pub const DEFAULT_OFFSET_MS: i64 = 0;
+/// The fine-tune range, either way.
+const MAX_OFFSET_MS: i64 = 3_000;
+/// How long after a song starts its post typically reaches the guest.
+const ANNOUNCE_LAG_MS: i64 = 400;
 
 impl AppContext {
-    pub async fn listen_start(self: &Arc<Self>, channel: &str, delay_ms: u64) -> AppState {
+    pub async fn listen_start(self: &Arc<Self>, channel: &str, offset_ms: i64) -> AppState {
         let channel = channel.trim().trim_start_matches('#').to_lowercase();
         self.listen_stop_task().await;
         if channel.is_empty() {
@@ -38,7 +38,7 @@ impl AppContext {
                 phase: "connecting".to_string(),
                 channel: channel.clone(),
                 detail: format!("Connecting to #{channel}..."),
-                delay_ms: delay_ms.min(MAX_DELAY_MS),
+                offset_ms: offset_ms.clamp(-MAX_OFFSET_MS, MAX_OFFSET_MS),
                 ..Default::default()
             };
         })
@@ -80,14 +80,15 @@ impl AppContext {
         .await;
         if was_on {
             self.add_log(LogLevel::Info, "Listen together: stopped.").await;
+            self.ensure_queue_progress("listen together stopped").await;
         }
         self.snapshot().await
     }
 
-    /// A new delay applies to the song already playing too.
-    pub async fn listen_set_delay(self: &Arc<Self>, delay_ms: u64) -> AppState {
-        let delay_ms = delay_ms.min(MAX_DELAY_MS);
-        self.set_listen(|listen| listen.delay_ms = delay_ms).await;
+    /// A new offset applies to the song already playing too.
+    pub async fn listen_set_offset(self: &Arc<Self>, offset_ms: i64) -> AppState {
+        let offset_ms = offset_ms.clamp(-MAX_OFFSET_MS, MAX_OFFSET_MS);
+        self.set_listen(|listen| listen.offset_ms = offset_ms).await;
         let song = {
             let mut runtime = self.runtime.write().await;
             runtime.listen_generation += 1;
@@ -188,8 +189,8 @@ impl AppContext {
     /// Waits until the song should start for the listener, then plays it
     /// (or seeks it, if it's already playing) from the right spot.
     async fn play_followed(self: Arc<Self>, id: String, received: SystemTime, generation: u64) {
-        let delay_ms = self.runtime.read().await.listen.delay_ms;
-        let start_at_ms = epoch_ms(received) - ANNOUNCE_LAG_MS as i64 + delay_ms as i64;
+        let offset_ms = self.runtime.read().await.listen.offset_ms;
+        let start_at_ms = epoch_ms(received) - ANNOUNCE_LAG_MS + offset_ms;
         let wait = start_at_ms - epoch_ms(SystemTime::now());
         if wait > 0 {
             tokio::time::sleep(Duration::from_millis(wait as u64)).await;

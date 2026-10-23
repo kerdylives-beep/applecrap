@@ -180,6 +180,9 @@ export function Setup({ store, state }: { store: AppStore; state: AppState }) {
   // setups that already use one; otherwise they hide behind a checkbox.
   const showToken = !state.auth.available || (!signedIn && (pastedToken || Boolean(state.settings.twitch.oauthToken)))
   const limits = draft.requestLimits
+  // The account chat runs as, when it isn't the channel itself.
+  const channel = draft.twitch.channel.trim().replace(/^#/, '').toLowerCase()
+  const botLogin = (state.auth.bot?.login ?? (state.auth.broadcaster ? '' : draft.twitch.botUsername)).trim().toLowerCase()
 
   return (
     <div className={s.page}>
@@ -221,10 +224,21 @@ export function Setup({ store, state }: { store: AppStore; state: AppState }) {
           <input type="checkbox" checked={draft.twitch.announceSongs} onChange={(event) => store.updateDraft('twitch', { announceSongs: event.target.checked })} />
           Post each new song in chat (&ldquo;Now playing: &hellip;&rdquo;, with an Apple Music link)
         </label>
+        {draft.twitch.announceSongs && botLogin && botLogin !== channel ? (
+          <label className={s.check}>
+            <input
+              type="checkbox"
+              checked={draft.twitch.announceInBotChannel}
+              onChange={(event) => store.updateDraft('twitch', { announceInBotChannel: event.target.checked })}
+            />
+            Post them in @{botLogin}&rsquo;s chat instead, so they don&rsquo;t crowd yours
+          </label>
+        ) : null}
         {draft.twitch.announceSongs ? (
           <p className={s.hint}>
-            Viewers with AppleCrap can listen along in time with your stream; <code>!listen</code> tells them how. A separate bot account
-            needs to be a mod for that.
+            Streaming with someone who has AppleCrap? They can play the same music at the same moment on their own Apple Music;{' '}
+            <code>!listen</code> tells them how.
+            {botLogin && botLogin !== channel && !draft.twitch.announceInBotChannel ? ` @${botLogin} needs to be a mod for that.` : ''}
           </p>
         ) : null}
         {state.auth.available && !signedIn && !state.settings.twitch.oauthToken ? (

@@ -15,7 +15,7 @@ import {
   exportDiagnostics,
   importLegacyState,
   installUpdate as installUpdateCommand,
-  listenSetDelay,
+  listenSetOffset,
   listenStart,
   listenStop,
   openOverlayPreview as openOverlayPreviewCommand,
@@ -71,6 +71,7 @@ const defaultSettings: AppSettings = {
     requestCommand: '!request',
     autoConnect: false,
     announceSongs: false,
+    announceInBotChannel: false,
   },
   requestLimits: {
     maxQueueSize: 25,
@@ -535,8 +536,8 @@ export function useAppStore() {
 
   // --- Listen together ------------------------------------------------------
 
-  const startListening = async (channel: string, delayMs: number) => {
-    const nextState = await runAction('listen-start', () => listenStart(channel, delayMs))
+  const startListening = async (channel: string, offsetMs: number) => {
+    const nextState = await runAction('listen-start', () => listenStart(channel, offsetMs))
     if (nextState) {
       adoptState(nextState)
     }
@@ -550,9 +551,9 @@ export function useAppStore() {
   }
 
   // Not a busy action: it runs while the slider moves.
-  const setListenDelay = async (delayMs: number) => {
+  const setListenOffset = async (offsetMs: number) => {
     try {
-      adoptState(await listenSetDelay(delayMs))
+      adoptState(await listenSetOffset(offsetMs))
     } catch (error) {
       setNotice(errorMessage(error))
     }
@@ -692,7 +693,7 @@ export function useAppStore() {
     showPlayer,
     startListening,
     stopListening,
-    setListenDelay,
+    setListenOffset,
     dismissAlert,
     reportProblem,
     copyDebugSummary,
